@@ -7,7 +7,9 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Drawing;
+using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
+using AMICUS.Animation;
 
 namespace AMICUS
 {
@@ -33,11 +35,32 @@ namespace AMICUS
         // Pet position
         private double _petX = 100;
         private double _petY = 100;
+        private double _petVelocityX = 0;
+        private double _petVelocityY = 0;
+        private const double PET_SPEED = 50; // pixels per second
 
         // Pet needs (0-100)
         private double _hunger = 75;
         private double _cleanliness = 85;
         private double _happiness = 90;
+
+        // Animation system
+        private AnimationController _animationController;
+
+        // Game loop timer
+        private DispatcherTimer _gameTimer;
+        private DateTime _lastUpdateTime;
+
+        // Wandering behavior
+        private Random _random;
+        private double _wanderTimer = 0;
+        private double _wanderInterval = 3.0; // Change direction every 3 seconds
+        private double _idleTimer = 0;
+        private double _idleInterval = 5.0; // Go idle every 5 seconds
+
+        // Needs degradation
+        private double _needsTimer = 0;
+        private const double NEEDS_DECAY_INTERVAL = 30.0; // Decay every 30 seconds
 
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
@@ -46,6 +69,16 @@ namespace AMICUS
         {
             InitializeComponent();
             SetupSystemTray();
+
+            // Initialize animation system
+            _animationController = new AnimationController();
+            _random = new Random();
+
+            // Setup game loop timer (60 FPS)
+            _gameTimer = new DispatcherTimer();
+            _gameTimer.Interval = TimeSpan.FromMilliseconds(16.67); // ~60 FPS
+            _gameTimer.Tick += GameTimer_Tick;
+            _lastUpdateTime = DateTime.Now;
         }
 
         private void SetupSystemTray()

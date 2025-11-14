@@ -98,12 +98,51 @@ Test Checklist:
 -   Using existing PNGs as-is (each PNG contains multiple animation frames)
 -   Phase 2 will implement frame extraction for animations
 
-**Phase 2: Pet Behavior (Week 2-3)**
+**Phase 2: Pet Behavior (Week 2-3) - 🚧 IN PROGRESS**
 
--   Implement state machine for animations
--   Pet sprite sheets are in Resources/Sprites/
--   Add random wandering behavior
--   Implement needs degradation system
+**Sprite Information:**
+-   Sprite strips located at: Resources/Sprites/RetroCatsPaid/Cats/Sprites/
+-   Each PNG contains horizontal sprite strip with multiple frames
+-   Frame size: 64x64 pixels
+-   Frame count calculated automatically (width / 64)
+-   Available animations: Idle, Running, Sleeping, Excited, Happy, Jump, Dance, etc.
+
+**Completed:**
+-   ✅ Created Animation folder structure
+-   ✅ Implemented PetState.cs (enum for Idle, Walking, Sleeping, Playing, Eating)
+-   ✅ Implemented PetDirection.cs (enum for Left, Right)
+-   ✅ Implemented SpriteManager.cs:
+    -   Loads sprite strips from individual PNG files
+    -   Automatically calculates frame count from bitmap width
+    -   Extracts and caches frames as CroppedBitmap objects
+    -   Helper methods for different animations (GetIdleFrames, GetRunningFrames, etc.)
+-   ✅ Implemented AnimationController.cs:
+    -   State machine with PetState transitions
+    -   Frame-based animation system with configurable FPS
+    -   Update() method for frame advancement
+    -   GetCurrentFrame() to retrieve current animation frame
+-   ✅ Added to MainWindow.xaml.cs:
+    -   AnimationController instance
+    -   DispatcherTimer for game loop (60 FPS)
+    -   Fields for wandering behavior (timers, intervals, random)
+    -   Fields for needs degradation system
+    -   Pet velocity variables for movement
+
+**TODO (Next Session):**
+-   ⏳ Complete MainWindow integration:
+    -   Implement GameTimer_Tick method (main game loop)
+    -   Update animation frames each tick
+    -   Remove old LoadPetSprite method
+-   ⏳ Implement random wandering behavior:
+    -   Random direction changes
+    -   Idle/walking state transitions
+    -   Boundary checking (keep pet on screen)
+    -   Pause wandering when being dragged
+-   ⏳ Implement needs degradation:
+    -   Decay hunger, cleanliness, happiness over time
+    -   Update UI meters automatically
+-   ⏳ Test all features together
+-   ⏳ Fix any bugs or issues
 
 **Phase 3: Interactions (Week 3-4)**
 
