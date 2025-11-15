@@ -128,21 +128,30 @@ Test Checklist:
     -   Fields for needs degradation system
     -   Pet velocity variables for movement
 
-**TODO (Next Session):**
--   ⏳ Complete MainWindow integration:
-    -   Implement GameTimer_Tick method (main game loop)
-    -   Update animation frames each tick
-    -   Remove old LoadPetSprite method
--   ⏳ Implement random wandering behavior:
-    -   Random direction changes
-    -   Idle/walking state transitions
-    -   Boundary checking (keep pet on screen)
-    -   Pause wandering when being dragged
--   ⏳ Implement needs degradation:
-    -   Decay hunger, cleanliness, happiness over time
-    -   Update UI meters automatically
+**Completed (Current Session):**
+-   ✅ Complete MainWindow integration:
+    -   ✅ Implemented GameTimer_Tick method (main game loop with 60 FPS update)
+    -   ✅ Update animation frames each tick via AnimationController
+    -   ✅ Removed old LoadPetSprite method
+-   ✅ Implement random wandering behavior:
+    -   ✅ Random direction changes every 2-5 seconds while walking
+    -   ✅ Idle/walking state transitions (50% chance to walk after 3-8 sec idle)
+    -   ✅ 30% chance to go idle while walking
+    -   ✅ 2D movement (X and Y velocity) with diagonal support
+    -   ✅ Pet faces left or right based on X velocity direction
+    -   ✅ Boundary checking on all edges (top, bottom, left, right)
+    -   ✅ Bounce behavior when hitting screen edges
+    -   ✅ Pause wandering when being dragged
+-   ✅ Implement needs degradation:
+    -   ✅ Decay hunger (-5), cleanliness (-3), happiness (-4) every 30 seconds
+    -   ✅ Update UI meters automatically
+-   ✅ Fixed nullable reference warnings in AnimationController
+
+**TODO (Testing & Refinement):**
 -   ⏳ Test all features together
--   ⏳ Fix any bugs or issues
+-   ⏳ Fix any bugs or issues discovered during testing
+-   ⏳ Adjust animation speeds if needed
+-   ⏳ Tune wandering behavior parameters (speed, intervals, etc.)
 
 **Phase 3: Interactions (Week 3-4)**
 

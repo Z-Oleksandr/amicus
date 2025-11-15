@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Drawing;
 using System.Windows.Threading;
+using Microsoft.Extensions.Logging;
 using WinForms = System.Windows.Forms;
 using AMICUS.Animation;
 
@@ -121,17 +122,32 @@ namespace AMICUS
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Load initial pet sprite
-            LoadPetSprite("Idle1");
+            try
+            {
+                App.Logger.LogInformation("Window loaded, initializing pet...");
 
-            // Set initial pet position
-            UpdatePetPosition(_petX, _petY);
+                // Set initial pet position
+                UpdatePetPosition(_petX, _petY);
 
-            // Update needs display
-            UpdateNeedsDisplay();
+                // Update needs display
+                UpdateNeedsDisplay();
 
-            // Set up click-through behavior after window is fully loaded
-            this.SourceInitialized += MainWindow_SourceInitialized;
+                // Initialize pet to idle state
+                _animationController.ChangeState(PetState.Idle);
+                _animationController.ChangeDirection(PetDirection.Right);
+
+                App.Logger.LogInformation("Pet initialized, starting game timer...");
+
+                // Start the game timer
+                _gameTimer.Start();
+
+                // Set up click-through behavior after window is fully loaded
+                this.SourceInitialized += MainWindow_SourceInitialized;
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error during window load");
+            }
         }
 
         private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -216,25 +232,6 @@ namespace AMICUS
             catch
             {
                 return false;
-            }
-        }
-
-        private void LoadPetSprite(string spriteName)
-        {
-            try
-            {
-                string spritePath = $"Resources/Sprites/RetroCatsPaid/Cats/Sprites/{spriteName}.png";
-                BitmapImage bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(spritePath, UriKind.Relative);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                PetImage.Source = bitmap;
-            }
-            catch (Exception ex)
-            {
-                // Fallback: create a simple colored rectangle if sprite fails to load
-                System.Windows.MessageBox.Show($"Failed to load sprite: {ex.Message}\nUsing placeholder instead.");
             }
         }
 
@@ -371,6 +368,135 @@ namespace AMICUS
             HungerBar.Value = _hunger;
             CleanlinessBar.Value = _cleanliness;
             HappinessBar.Value = _happiness;
+        }
+
+        private void GameTimer_Tick(object? sender, EventArgs e)
+        {
+            try
+            {
+                // Calculate delta time
+                DateTime currentTime = DateTime.Now;
+                double deltaTime = (currentTime - _lastUpdateTime).TotalSeconds;
+                _lastUpdateTime = currentTime;
+
+            // Don't update wandering behavior if pet is being dragged
+            if (!_isDraggingPet)
+            {
+                // Update wandering behavior timers
+                _wanderTimer += deltaTime;
+                _idleTimer += deltaTime;
+
+                // Random direction changes during walking
+                if (_animationController.CurrentState == PetState.Walking && _wanderTimer >= _wanderInterval)
+                {
+                    _wanderTimer = 0;
+                    _wanderInterval = _random.Next(2, 5); // Random interval 2-5 seconds
+
+                    // Random chance to go idle (30% chance)
+                    if (_random.NextDouble() < 0.3)
+                    {
+                        _animationController.ChangeState(PetState.Idle);
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                    }
+                    else
+                    {
+                        // Change direction randomly (including diagonal movement)
+                        _petVelocityX = (_random.NextDouble() - 0.5) * 2 * PET_SPEED; // Range: -PET_SPEED to +PET_SPEED
+                        _petVelocityY = (_random.NextDouble() - 0.5) * 2 * PET_SPEED; // Range: -PET_SPEED to +PET_SPEED
+
+                        // Set facing direction based on X velocity
+                        if (_petVelocityX > 0)
+                            _animationController.ChangeDirection(PetDirection.Right);
+                        else if (_petVelocityX < 0)
+                            _animationController.ChangeDirection(PetDirection.Left);
+                    }
+                }
+
+                // Random transitions from idle to walking
+                if (_animationController.CurrentState == PetState.Idle && _idleTimer >= _idleInterval)
+                {
+                    _idleTimer = 0;
+                    _idleInterval = _random.Next(3, 8); // Random interval 3-8 seconds
+
+                    // Random chance to start walking (50% chance)
+                    if (_random.NextDouble() < 0.5)
+                    {
+                        _animationController.ChangeState(PetState.Walking);
+
+                        // Random velocity in both X and Y
+                        _petVelocityX = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
+                        _petVelocityY = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
+
+                        // Set facing direction based on X velocity
+                        if (_petVelocityX > 0)
+                            _animationController.ChangeDirection(PetDirection.Right);
+                        else if (_petVelocityX < 0)
+                            _animationController.ChangeDirection(PetDirection.Left);
+                    }
+                }
+
+                // Update pet position based on velocity
+                double newX = _petX + (_petVelocityX * deltaTime);
+                double newY = _petY + (_petVelocityY * deltaTime);
+
+                // Boundary checking - keep pet on screen and bounce off edges
+                if (newX < 0)
+                {
+                    newX = 0;
+                    _petVelocityX = Math.Abs(_petVelocityX); // Bounce right
+                    _animationController.ChangeDirection(PetDirection.Right);
+                }
+                else if (newX > MainCanvas.ActualWidth - PetImage.ActualWidth)
+                {
+                    newX = MainCanvas.ActualWidth - PetImage.ActualWidth;
+                    _petVelocityX = -Math.Abs(_petVelocityX); // Bounce left
+                    _animationController.ChangeDirection(PetDirection.Left);
+                }
+
+                if (newY < 0)
+                {
+                    newY = 0;
+                    _petVelocityY = Math.Abs(_petVelocityY); // Bounce down
+                }
+                else if (newY > MainCanvas.ActualHeight - PetImage.ActualHeight)
+                {
+                    newY = MainCanvas.ActualHeight - PetImage.ActualHeight;
+                    _petVelocityY = -Math.Abs(_petVelocityY); // Bounce up
+                }
+
+                UpdatePetPosition(newX, newY);
+            }
+
+            // Update animation controller
+            _animationController.Update(deltaTime);
+
+            // Get current animation frame and update sprite
+            var currentFrame = _animationController.GetCurrentFrame();
+            if (currentFrame != null)
+            {
+                PetImage.Source = currentFrame;
+            }
+
+            // Update needs degradation
+            _needsTimer += deltaTime;
+            if (_needsTimer >= NEEDS_DECAY_INTERVAL)
+            {
+                _needsTimer = 0;
+
+                // Decay needs over time
+                _hunger = Math.Max(0, _hunger - 5);
+                _cleanliness = Math.Max(0, _cleanliness - 3);
+                _happiness = Math.Max(0, _happiness - 4);
+
+                UpdateNeedsDisplay();
+            }
+            }
+            catch (Exception ex)
+            {
+                _gameTimer.Stop();
+                App.Logger.LogError(ex, "Error in game loop - timer stopped");
+            }
         }
     }
 }

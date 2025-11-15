@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Media.Imaging;
+using Microsoft.Extensions.Logging;
 
 namespace AMICUS.Animation
 {
@@ -9,11 +10,12 @@ namespace AMICUS.Animation
     /// </summary>
     public class AnimationController
     {
+        private static Microsoft.Extensions.Logging.ILogger Logger => App.Logger;
         private SpriteManager _spriteManager;
         private PetState _currentState;
         private PetDirection _currentDirection;
 
-        private List<CroppedBitmap> _currentFrames;
+        private List<CroppedBitmap> _currentFrames = new List<CroppedBitmap>();
         private int _currentFrameIndex;
         private double _frameTime;
         private double _frameDelay; // Time between frames in seconds
@@ -40,6 +42,9 @@ namespace AMICUS.Animation
         /// <param name="deltaTime">Time elapsed since last update in seconds</param>
         public void Update(double deltaTime)
         {
+            if (_currentFrames == null || _currentFrames.Count == 0)
+                return;
+
             _frameTime += deltaTime;
 
             if (_frameTime >= _frameDelay)
@@ -52,7 +57,7 @@ namespace AMICUS.Animation
         /// <summary>
         /// Gets the current frame to display
         /// </summary>
-        public CroppedBitmap GetCurrentFrame()
+        public CroppedBitmap? GetCurrentFrame()
         {
             if (_currentFrames == null || _currentFrames.Count == 0)
                 return null;
@@ -68,20 +73,33 @@ namespace AMICUS.Animation
             if (_currentState == newState)
                 return;
 
+            Logger.LogDebug("Changing pet state from {OldState} to {NewState}", _currentState, newState);
+
             _currentState = newState;
             _currentFrameIndex = 0;
             _frameTime = 0;
 
-            // Load appropriate animation frames based on state
-            _currentFrames = newState switch
+            try
             {
-                PetState.Idle => _spriteManager.GetIdleFrames(),
-                PetState.Walking => _spriteManager.GetRunningFrames(),
-                PetState.Sleeping => _spriteManager.GetSleepingFrames(),
-                PetState.Playing => _spriteManager.GetExcitedFrames(),
-                PetState.Eating => _spriteManager.GetHappyFrames(),
-                _ => _spriteManager.GetIdleFrames()
-            };
+                // Load appropriate animation frames based on state
+                _currentFrames = newState switch
+                {
+                    PetState.Idle => _spriteManager.GetIdleFrames(),
+                    PetState.Walking => _spriteManager.GetRunningFrames(),
+                    PetState.Sleeping => _spriteManager.GetSleepingFrames(),
+                    PetState.Playing => _spriteManager.GetExcitedFrames(),
+                    PetState.Eating => _spriteManager.GetHappyFrames(),
+                    _ => _spriteManager.GetIdleFrames()
+                };
+
+                Logger.LogInformation("State changed to {NewState} with {FrameCount} frames",
+                    newState, _currentFrames?.Count ?? 0);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load animation for state {State}", newState);
+                _currentFrames = new List<CroppedBitmap>(); // Fallback to empty list
+            }
         }
 
         /// <summary>

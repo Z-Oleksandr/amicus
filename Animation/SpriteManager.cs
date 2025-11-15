@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Extensions.Logging;
 
 namespace AMICUS.Animation
 {
@@ -10,6 +11,7 @@ namespace AMICUS.Animation
     /// </summary>
     public class SpriteManager
     {
+        private static Microsoft.Extensions.Logging.ILogger Logger => App.Logger;
         private const int FRAME_WIDTH = 64;
         private const int FRAME_HEIGHT = 64;
         private const string SPRITE_BASE_PATH = "Resources/Sprites/RetroCatsPaid/Cats/Sprites/";
@@ -32,12 +34,15 @@ namespace AMICUS.Animation
             // Check cache first
             if (_animationCache.ContainsKey(spriteName))
             {
+                Logger.LogDebug("Sprite '{SpriteName}' loaded from cache", spriteName);
                 return _animationCache[spriteName];
             }
 
             try
             {
                 string spritePath = $"{SPRITE_BASE_PATH}{spriteName}.png";
+                Logger.LogDebug("Loading sprite from path: {SpritePath}", spritePath);
+
                 BitmapImage bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.UriSource = new Uri(spritePath, UriKind.Relative);
@@ -46,6 +51,8 @@ namespace AMICUS.Animation
 
                 // Calculate frame count from bitmap width
                 int frameCount = bitmap.PixelWidth / FRAME_WIDTH;
+                Logger.LogInformation("Loaded sprite '{SpriteName}': {Width}x{Height} pixels, {FrameCount} frames",
+                    spriteName, bitmap.PixelWidth, bitmap.PixelHeight, frameCount);
 
                 // Extract frames from the horizontal strip
                 var frames = new List<CroppedBitmap>();
@@ -58,11 +65,14 @@ namespace AMICUS.Animation
 
                 // Cache the frames
                 _animationCache[spriteName] = frames;
+                Logger.LogDebug("Sprite '{SpriteName}' cached successfully", spriteName);
                 return frames;
             }
             catch (Exception ex)
             {
-                throw new Exception($"Failed to load sprite '{spriteName}': {ex.Message}");
+                Logger.LogError(ex, "Failed to load sprite '{SpriteName}' from path '{SpritePath}'",
+                    spriteName, $"{SPRITE_BASE_PATH}{spriteName}.png");
+                throw new Exception($"Failed to load sprite '{spriteName}': {ex.Message}", ex);
             }
         }
 
