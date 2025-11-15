@@ -63,6 +63,34 @@ namespace AMICUS
         private double _needsTimer = 0;
         private const double NEEDS_DECAY_INTERVAL = 30.0; // Decay every 30 seconds
 
+        // Mouse cursor tracking and chasing
+        private System.Windows.Point _mousePosition;
+        private bool _isChasingMouse = false;
+        private double _chaseCheckTimer = 0;
+        private const double CHASE_CHECK_INTERVAL = 2.0; // Check every 2 seconds if should chase
+        private const double CHASE_TRIGGER_DISTANCE = 100.0; // Trigger chase if mouse within this distance (100px radius)
+        private const double CHASE_SPEED = 120; // pixels per second when chasing
+        private const double CHASE_DURATION_MIN = 10.0; // Min time to chase in seconds
+        private const double CHASE_DURATION_MAX = 15.0; // Max time to chase in seconds
+        private double _chaseTimeRemaining = 0;
+        private double _chaseTimeElapsed = 0; // Track how long we've been chasing
+        private const double ATTACK_DISTANCE = 80.0; // Distance to trigger attack animation
+        private const double MIN_CHASE_TIME_BEFORE_ATTACK = 5.0; // Must chase for 5 seconds before attacking
+
+        // Direction change management to prevent glitching
+        private double _directionChangeTimer = 0;
+        private const double DIRECTION_CHANGE_COOLDOWN = 0.2; // Only allow direction change every 0.2 seconds
+
+        // Petting interaction
+        private double _timeSinceLastInteraction = 0;
+        private const double PET_COOLDOWN = 2.0; // Cooldown between petting in seconds
+
+        // Action animations
+        private bool _isPerformingAction = false;
+        private double _actionTimer = 0;
+        private const double ACTION_DURATION = 3.0; // Duration of action animations in seconds
+        private PetState _stateBeforeAction = PetState.Idle;
+
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
 
@@ -143,6 +171,9 @@ namespace AMICUS
 
                 // Set up click-through behavior after window is fully loaded
                 this.SourceInitialized += MainWindow_SourceInitialized;
+
+                // Set up mouse tracking for the entire window
+                this.MouseMove += Window_MouseMove;
             }
             catch (Exception ex)
             {
@@ -243,9 +274,35 @@ namespace AMICUS
             Canvas.SetTop(PetImage, y);
         }
 
+        // Mouse tracking for the entire window
+        private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _mousePosition = e.GetPosition(MainCanvas);
+        }
+
         // Pet dragging event handlers
         private void PetImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // Check if this is a petting interaction (not dragging)
+            if (!_isDraggingPet && _timeSinceLastInteraction >= PET_COOLDOWN)
+            {
+                // Petting interaction - increase happiness
+                _happiness = Math.Min(100, _happiness + 10);
+                UpdateNeedsDisplay();
+                _timeSinceLastInteraction = 0;
+
+                // Play happy animation briefly
+                if (!_isPerformingAction)
+                {
+                    _stateBeforeAction = _animationController.CurrentState;
+                    _animationController.ChangeState(PetState.Playing);
+                    _isPerformingAction = true;
+                    _actionTimer = 0;
+                }
+
+                App.Logger.LogInformation("Pet petted! Happiness increased.");
+            }
+
             _isDraggingPet = true;
             _petDragOffset = e.GetPosition(PetImage);
             PetImage.CaptureMouse();
@@ -258,7 +315,42 @@ namespace AMICUS
             {
                 _isDraggingPet = false;
                 PetImage.ReleaseMouseCapture();
+
+                // Check if pet was dragged to the house area (bottom-right corner)
+                CheckDragToHouse();
+
                 e.Handled = true;
+            }
+        }
+
+        private void CheckDragToHouse()
+        {
+            // Calculate the house panel area (bottom-right corner)
+            double houseLeft = MainCanvas.ActualWidth - 270; // 250 width + 20 margin
+            double houseTop = MainCanvas.ActualHeight - 552; // 492 height + 60 margin
+            double houseRight = MainCanvas.ActualWidth - 20;
+            double houseBottom = MainCanvas.ActualHeight - 60;
+
+            // Get pet center position
+            double petCenterX = _petX + (PetImage.ActualWidth / 2);
+            double petCenterY = _petY + (PetImage.ActualHeight / 2);
+
+            // Check if pet is in the house area
+            if (petCenterX >= houseLeft && petCenterX <= houseRight &&
+                petCenterY >= houseTop && petCenterY <= houseBottom)
+            {
+                // Pet was dragged to the house!
+                App.Logger.LogInformation("Pet dragged to house area!");
+
+                // Show the house panel if not already visible
+                if (HousePanel.Visibility == Visibility.Collapsed)
+                {
+                    ShowHousePanel();
+                }
+
+                // Increase happiness for bringing pet home
+                _happiness = Math.Min(100, _happiness + 5);
+                UpdateNeedsDisplay();
             }
         }
 
@@ -335,23 +427,65 @@ namespace AMICUS
         // Action button handlers
         private void FeedButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_isPerformingAction) return; // Don't interrupt ongoing actions
+
             _hunger = Math.Min(100, _hunger + 25);
             UpdateNeedsDisplay();
-            System.Windows.MessageBox.Show("Nom nom! 🍽️", "Amicus");
+
+            // Stop any chasing behavior
+            _isChasingMouse = false;
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+
+            // Play eating animation
+            _stateBeforeAction = _animationController.CurrentState;
+            _animationController.ChangeState(PetState.Eating);
+            _isPerformingAction = true;
+            _actionTimer = 0;
+
+            App.Logger.LogInformation("Fed the pet - hunger restored!");
         }
 
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_isPerformingAction) return; // Don't interrupt ongoing actions
+
             _cleanliness = Math.Min(100, _cleanliness + 25);
             UpdateNeedsDisplay();
-            System.Windows.MessageBox.Show("Sparkle sparkle! ✨", "Amicus");
+
+            // Stop any chasing behavior
+            _isChasingMouse = false;
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+
+            // Play happy animation
+            _stateBeforeAction = _animationController.CurrentState;
+            _animationController.ChangeState(PetState.Playing);
+            _isPerformingAction = true;
+            _actionTimer = 0;
+
+            App.Logger.LogInformation("Cleaned the pet - cleanliness restored!");
         }
 
         private void PlayButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_isPerformingAction) return; // Don't interrupt ongoing actions
+
             _happiness = Math.Min(100, _happiness + 25);
             UpdateNeedsDisplay();
-            System.Windows.MessageBox.Show("Purr purr! 😺", "Amicus");
+
+            // Stop any chasing behavior
+            _isChasingMouse = false;
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+
+            // Play excited animation
+            _stateBeforeAction = _animationController.CurrentState;
+            _animationController.ChangeState(PetState.Playing);
+            _isPerformingAction = true;
+            _actionTimer = 0;
+
+            App.Logger.LogInformation("Played with the pet - happiness increased!");
         }
 
         private void ExitButton_Click(object sender, RoutedEventArgs e)
@@ -392,9 +526,169 @@ namespace AMICUS
                 double deltaTime = (currentTime - _lastUpdateTime).TotalSeconds;
                 _lastUpdateTime = currentTime;
 
-            // Don't update wandering behavior if pet is being dragged
-            if (!_isDraggingPet)
+            // Update interaction cooldown timer
+            _timeSinceLastInteraction += deltaTime;
+
+            // Update direction change cooldown timer
+            _directionChangeTimer += deltaTime;
+
+            // Handle action animations (eating, playing, etc.)
+            if (_isPerformingAction)
             {
+                _actionTimer += deltaTime;
+                if (_actionTimer >= ACTION_DURATION)
+                {
+                    _isPerformingAction = false;
+                    _actionTimer = 0;
+
+                    // Return to idle or random state after action
+                    var randomValue = _random.NextDouble();
+                    if (randomValue < 0.5)
+                        _animationController.ChangeState(PetState.Idle);
+                    else if (randomValue < 0.75)
+                        _animationController.ChangeState(PetState.Playing);
+                    else
+                        _animationController.ChangeState(PetState.Walking);
+
+                    App.Logger.LogDebug("Action completed, returning to normal behavior");
+                }
+            }
+
+            // Don't update wandering/chasing behavior if pet is being dragged or performing action
+            if (!_isDraggingPet && !_isPerformingAction)
+            {
+                // Calculate distance to mouse cursor
+                double petCenterX = _petX + (PetImage.ActualWidth / 2);
+                double petCenterY = _petY + (PetImage.ActualHeight / 2);
+                double deltaX = _mousePosition.X - petCenterX;
+                double deltaY = _mousePosition.Y - petCenterY;
+                double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                // Update chase check timer
+                _chaseCheckTimer += deltaTime;
+
+                // Check if we should start chasing
+                if (!_isChasingMouse && _chaseCheckTimer >= CHASE_CHECK_INTERVAL)
+                {
+                    _chaseCheckTimer = 0;
+
+                    // 30% chance to start chasing if mouse is within trigger distance
+                    if (distanceToMouse < CHASE_TRIGGER_DISTANCE && _random.NextDouble() < 0.3)
+                    {
+                        _isChasingMouse = true;
+                        _chaseTimeRemaining = _random.NextDouble() * (CHASE_DURATION_MAX - CHASE_DURATION_MIN) + CHASE_DURATION_MIN;
+                        _chaseTimeElapsed = 0; // Reset chase elapsed time
+                        _directionChangeTimer = DIRECTION_CHANGE_COOLDOWN; // Allow immediate direction change when starting
+                        _animationController.ChangeState(PetState.Chasing);
+
+                        // Set initial direction toward mouse
+                        if (deltaX > 0)
+                            _animationController.ChangeDirection(PetDirection.Right);
+                        else if (deltaX < 0)
+                            _animationController.ChangeDirection(PetDirection.Left);
+
+                        App.Logger.LogInformation("Started chasing mouse! Duration: {Duration}s, Distance: {Distance}, Direction: deltaX={DeltaX}",
+                            _chaseTimeRemaining, distanceToMouse, deltaX);
+                    }
+                }
+
+                // Handle mouse chasing behavior
+                if (_isChasingMouse)
+                {
+                    _chaseTimeRemaining -= deltaTime;
+                    _chaseTimeElapsed += deltaTime;
+
+                    // Check if we should attack (close to mouse AND chased for minimum time)
+                    if (distanceToMouse < ATTACK_DISTANCE &&
+                        _chaseTimeElapsed >= MIN_CHASE_TIME_BEFORE_ATTACK &&
+                        _animationController.CurrentState != PetState.Attacking)
+                    {
+                        _animationController.ChangeState(PetState.Attacking);
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        App.Logger.LogInformation("Attack! Distance to mouse: {Distance}, Chase time: {ChaseTime}s", distanceToMouse, _chaseTimeElapsed);
+                    }
+                    else if (distanceToMouse >= ATTACK_DISTANCE && _animationController.CurrentState == PetState.Attacking)
+                    {
+                        // Mouse moved away, resume chasing
+                        _animationController.ChangeState(PetState.Chasing);
+                        App.Logger.LogDebug("Resuming chase - mouse moved away");
+                    }
+
+                    // Move toward mouse if not attacking
+                    if (_animationController.CurrentState == PetState.Chasing)
+                    {
+                        // Calculate direction to mouse and normalize
+                        double distanceToTarget = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+                        if (distanceToTarget > 5) // Only chase if more than 5 pixels away
+                        {
+                            // Set velocity toward mouse
+                            _petVelocityX = (deltaX / distanceToTarget) * CHASE_SPEED;
+                            _petVelocityY = (deltaY / distanceToTarget) * CHASE_SPEED;
+
+                            // Set facing direction with cooldown to prevent rapid flipping
+                            if (_directionChangeTimer >= DIRECTION_CHANGE_COOLDOWN)
+                            {
+                                // Only change direction if X velocity is significant
+                                if (Math.Abs(deltaX) > 10) // Horizontal movement must be at least 10 pixels
+                                {
+                                    if (_petVelocityX > 0 && _animationController.CurrentDirection != PetDirection.Right)
+                                    {
+                                        _animationController.ChangeDirection(PetDirection.Right);
+                                        _directionChangeTimer = 0;
+                                        App.Logger.LogDebug("Chase: Changed direction to Right");
+                                    }
+                                    else if (_petVelocityX < 0 && _animationController.CurrentDirection != PetDirection.Left)
+                                    {
+                                        _animationController.ChangeDirection(PetDirection.Left);
+                                        _directionChangeTimer = 0;
+                                        App.Logger.LogDebug("Chase: Changed direction to Left");
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Very close to target, stop moving
+                            _petVelocityX = 0;
+                            _petVelocityY = 0;
+                        }
+                    }
+
+                    // Check if chase should end
+                    if (_chaseTimeRemaining <= 0)
+                    {
+                        _isChasingMouse = false;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        _chaseTimeElapsed = 0; // Reset elapsed time
+
+                        // Transition to random state after chasing
+                        var randomValue = _random.NextDouble();
+                        if (randomValue < 0.33)
+                        {
+                            _animationController.ChangeState(PetState.Idle);
+                            App.Logger.LogInformation("Chase ended - going to Idle");
+                        }
+                        else if (randomValue < 0.66)
+                        {
+                            _animationController.ChangeState(PetState.Playing);
+                            App.Logger.LogInformation("Chase ended - going to Playing (happy)");
+                        }
+                        else
+                        {
+                            _animationController.ChangeState(PetState.Idle);
+                            App.Logger.LogInformation("Chase ended - chilling (Idle)");
+                        }
+
+                        // Reset timers for normal wandering
+                        _idleTimer = 0;
+                        _idleInterval = _random.Next(3, 8);
+                    }
+                }
+                // Normal wandering behavior when not chasing
+                else
+                {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
                 _idleTimer += deltaTime;
@@ -456,6 +750,7 @@ namespace AMICUS
                         _wanderInterval = _random.Next(2, 5);
                     }
                 }
+                } // End of normal wandering else block
 
                 // Update pet position based on velocity
                 double newX = _petX + (_petVelocityX * deltaTime);
@@ -467,27 +762,73 @@ namespace AMICUS
                 if (newX < 0)
                 {
                     newX = 0;
-                    _petVelocityX = Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY); // Bounce right with minimum velocity
-                    _animationController.ChangeDirection(PetDirection.Right);
-                    App.Logger.LogDebug("Pet hit left edge, bouncing right with velocity {VelocityX}", _petVelocityX);
+                    if (_isChasingMouse)
+                    {
+                        // Stop chasing if hit edge
+                        _isChasingMouse = false;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        _chaseTimeElapsed = 0;
+                        _animationController.ChangeState(PetState.Idle);
+                    }
+                    else
+                    {
+                        _petVelocityX = Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
+                        _animationController.ChangeDirection(PetDirection.Right);
+                    }
+                    App.Logger.LogDebug("Pet hit left edge");
                 }
                 else if (newX > MainCanvas.ActualWidth - PetImage.ActualWidth)
                 {
                     newX = MainCanvas.ActualWidth - PetImage.ActualWidth;
-                    _petVelocityX = -Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY); // Bounce left with minimum velocity
-                    _animationController.ChangeDirection(PetDirection.Left);
-                    App.Logger.LogDebug("Pet hit right edge, bouncing left with velocity {VelocityX}", _petVelocityX);
+                    if (_isChasingMouse)
+                    {
+                        // Stop chasing if hit edge
+                        _isChasingMouse = false;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        _chaseTimeElapsed = 0;
+                        _animationController.ChangeState(PetState.Idle);
+                    }
+                    else
+                    {
+                        _petVelocityX = -Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
+                        _animationController.ChangeDirection(PetDirection.Left);
+                    }
+                    App.Logger.LogDebug("Pet hit right edge");
                 }
 
                 if (newY < 0)
                 {
                     newY = 0;
-                    _petVelocityY = Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY); // Bounce down with minimum velocity
+                    if (_isChasingMouse)
+                    {
+                        _isChasingMouse = false;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        _chaseTimeElapsed = 0;
+                        _animationController.ChangeState(PetState.Idle);
+                    }
+                    else
+                    {
+                        _petVelocityY = Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
+                    }
                 }
                 else if (newY > MainCanvas.ActualHeight - PetImage.ActualHeight)
                 {
                     newY = MainCanvas.ActualHeight - PetImage.ActualHeight;
-                    _petVelocityY = -Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY); // Bounce up with minimum velocity
+                    if (_isChasingMouse)
+                    {
+                        _isChasingMouse = false;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        _chaseTimeElapsed = 0;
+                        _animationController.ChangeState(PetState.Idle);
+                    }
+                    else
+                    {
+                        _petVelocityY = -Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
+                    }
                 }
 
                 UpdatePetPosition(newX, newY);

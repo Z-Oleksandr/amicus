@@ -101,12 +101,53 @@ All core pet behavior features implemented and tested successfully:
 -   ⏳ Add more animation states (Sleeping, Playing, Eating)
 -   ⏳ Tune needs degration
 
-**Phase 3: Interactions (Week 3-4)**
+**Phase 3: Interactions (Week 3-4) - ⚠️ IN PROGRESS**
 
--   Mouse cursor tracking and chasing behavior
--   Click interactions (petting, feeding, playing)
--   Drag-to-house functionality
--   Needs degration and satisfaction mechanics
+**Implemented Features:**
+-   ✅ Mouse cursor tracking across entire window
+-   ✅ Click interactions (petting increases happiness)
+-   ✅ Drag-to-house functionality (opens house panel)
+-   ✅ Action button animations (Feed → Eating, Clean → Playing, Play → Playing)
+-   ✅ Attack animation state added
+-   ✅ Petting cooldown (2 seconds)
+-   ✅ Action animation duration (3 seconds)
+
+**Known Issues (CRITICAL - Must Fix):**
+
+1. **Attack Animation Bug** (MainWindow.xaml.cs:586-600)
+   - Cat keeps attacking even when mouse is far away
+   - Attack state doesn't properly transition back to chasing
+   - Need to add distance check to exit attack state
+   - Attack should be brief (1-2 seconds max), not continuous
+
+2. **Chasing Behavior Broken** (MainWindow.xaml.cs:610-647)
+   - Cat only moves if mouse is directly over it
+   - Gets stuck in one spot showing running animation but not moving
+   - Velocity calculation appears correct but pet doesn't actually move
+   - Issue likely in position update logic or state management
+   - Direction glitching persists despite cooldown implementation
+
+3. **Idle Animation Movement** (MainWindow.xaml.cs:660-715)
+   - Cat sometimes moves around screen while showing idle animation
+   - Velocity not being properly zeroed when transitioning to idle
+   - Need to ensure velocity is cleared on state change to idle
+
+**Technical Details:**
+
+Current Implementation:
+- Trigger distance: 100px radius
+- Chase duration: 10-15 seconds (randomized)
+- Chase speed: 120 px/s
+- Attack distance: 80px
+- Min chase time before attack: 5 seconds
+- Direction change cooldown: 0.2 seconds
+
+**Next Steps:**
+1. Fix attack state - add timer to exit attack after 1-2 seconds
+2. Debug chasing movement - check why pet gets stuck
+3. Fix velocity not clearing properly on idle transitions
+4. Test all state transitions thoroughly
+5. Add more robust logging for debugging state/velocity issues
 
 **Phase 4: Reminders & Polish (Week 4-5)**
 
