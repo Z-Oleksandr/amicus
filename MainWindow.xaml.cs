@@ -91,6 +91,10 @@ namespace AMICUS
         private const double ACTION_DURATION = 3.0; // Duration of action animations in seconds
         private PetState _stateBeforeAction = PetState.Idle;
 
+        // Attack animation
+        private double _attackTimer = 0;
+        private const double ATTACK_DURATION = 1.5; // Duration of attack animation in seconds
+
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
 
@@ -544,13 +548,34 @@ namespace AMICUS
                     // Return to idle or random state after action
                     var randomValue = _random.NextDouble();
                     if (randomValue < 0.5)
+                    {
                         _animationController.ChangeState(PetState.Idle);
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        App.Logger.LogDebug("Action completed → Idle (velocity cleared)");
+                    }
                     else if (randomValue < 0.75)
+                    {
                         _animationController.ChangeState(PetState.Playing);
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+                        App.Logger.LogDebug("Action completed → Playing (velocity cleared)");
+                    }
                     else
+                    {
                         _animationController.ChangeState(PetState.Walking);
+                        // Set random velocity for walking
+                        _petVelocityX = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
+                        _petVelocityY = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
 
-                    App.Logger.LogDebug("Action completed, returning to normal behavior");
+                        // Set facing direction
+                        if (_petVelocityX > 0)
+                            _animationController.ChangeDirection(PetDirection.Right);
+                        else if (_petVelocityX < 0)
+                            _animationController.ChangeDirection(PetDirection.Left);
+
+                        App.Logger.LogDebug("Action completed → Walking (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
+                    }
                 }
             }
 
@@ -598,21 +623,44 @@ namespace AMICUS
                     _chaseTimeRemaining -= deltaTime;
                     _chaseTimeElapsed += deltaTime;
 
-                    // Check if we should attack (close to mouse AND chased for minimum time)
-                    if (distanceToMouse < ATTACK_DISTANCE &&
-                        _chaseTimeElapsed >= MIN_CHASE_TIME_BEFORE_ATTACK &&
-                        _animationController.CurrentState != PetState.Attacking)
+                    // Handle attack animation
+                    if (_animationController.CurrentState == PetState.Attacking)
+                    {
+                        _attackTimer += deltaTime;
+
+                        // Exit attack after duration
+                        if (_attackTimer >= ATTACK_DURATION)
+                        {
+                            _attackTimer = 0;
+
+                            // If still chasing and mouse is far, resume chasing
+                            if (_chaseTimeRemaining > 0 && distanceToMouse >= ATTACK_DISTANCE)
+                            {
+                                _animationController.ChangeState(PetState.Chasing);
+                                App.Logger.LogInformation("Attack finished - resuming chase");
+                            }
+                            // If chase time is up or mouse is still close, end chase
+                            else
+                            {
+                                _isChasingMouse = false;
+                                _petVelocityX = 0;
+                                _petVelocityY = 0;
+                                _chaseTimeElapsed = 0;
+                                _animationController.ChangeState(PetState.Idle);
+                                App.Logger.LogInformation("Attack finished - ending chase");
+                            }
+                        }
+                    }
+                    // Check if we should start attacking (close to mouse AND chased for minimum time)
+                    else if (distanceToMouse < ATTACK_DISTANCE &&
+                             _chaseTimeElapsed >= MIN_CHASE_TIME_BEFORE_ATTACK &&
+                             _animationController.CurrentState == PetState.Chasing)
                     {
                         _animationController.ChangeState(PetState.Attacking);
                         _petVelocityX = 0;
                         _petVelocityY = 0;
+                        _attackTimer = 0; // Reset attack timer
                         App.Logger.LogInformation("Attack! Distance to mouse: {Distance}, Chase time: {ChaseTime}s", distanceToMouse, _chaseTimeElapsed);
-                    }
-                    else if (distanceToMouse >= ATTACK_DISTANCE && _animationController.CurrentState == PetState.Attacking)
-                    {
-                        // Mouse moved away, resume chasing
-                        _animationController.ChangeState(PetState.Chasing);
-                        App.Logger.LogDebug("Resuming chase - mouse moved away");
                     }
 
                     // Move toward mouse if not attacking
@@ -625,6 +673,9 @@ namespace AMICUS
                             // Set velocity toward mouse
                             _petVelocityX = (deltaX / distanceToTarget) * CHASE_SPEED;
                             _petVelocityY = (deltaY / distanceToTarget) * CHASE_SPEED;
+
+                            App.Logger.LogDebug("Chasing: velocity=({VX:F1}, {VY:F1}), distance={Dist:F1}, pos=({X:F0}, {Y:F0})",
+                                _petVelocityX, _petVelocityY, distanceToTarget, _petX, _petY);
 
                             // Set facing direction with cooldown to prevent rapid flipping
                             if (_directionChangeTimer >= DIRECTION_CHANGE_COOLDOWN)
@@ -652,6 +703,7 @@ namespace AMICUS
                             // Very close to target, stop moving
                             _petVelocityX = 0;
                             _petVelocityY = 0;
+                            App.Logger.LogDebug("Chasing: Very close to target, stopping");
                         }
                     }
 
@@ -709,6 +761,8 @@ namespace AMICUS
                         // Reset idle timer and set new interval when transitioning to idle
                         _idleTimer = 0;
                         _idleInterval = _random.Next(3, 8);
+
+                        App.Logger.LogDebug("Wandering: Walking → Idle (velocity cleared)");
                     }
                     else
                     {
@@ -721,6 +775,8 @@ namespace AMICUS
                             _animationController.ChangeDirection(PetDirection.Right);
                         else if (_petVelocityX < 0)
                             _animationController.ChangeDirection(PetDirection.Left);
+
+                        App.Logger.LogDebug("Wandering: Changed direction (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
                     }
                 }
 
@@ -748,6 +804,8 @@ namespace AMICUS
                         // Reset wander timer and set new interval when transitioning to walking
                         _wanderTimer = 0;
                         _wanderInterval = _random.Next(2, 5);
+
+                        App.Logger.LogDebug("Wandering: Idle → Walking (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
                     }
                 }
                 } // End of normal wandering else block
