@@ -54,30 +54,6 @@ ShowInTaskbar = false
 
 **Phase 1: Foundation ✅ COMPLETE**
 
-Test Checklist:
-
-1. ✅ Run the app: Builds and starts successfully
-2. ✅ Verify transparency: Desktop is visible through empty areas
-3. ✅ Test dragging: Cat is draggable
-4. ✅ Test click-through: Works correctly on empty areas
-5. ✅ Test house panel: Opens/closes with smooth animations
-6. ✅ Test action buttons: All buttons functional (Feed, Clean, Play)
-7. ✅ Test exit: Both system tray and in-app exit button work
-
-**Implemented Features:**
-
--   ✅ Transparent overlay window with always-on-top functionality
--   ✅ Intelligent hit-testing (interactive elements clickable, transparent areas click-through)
--   ✅ Pet sprite rendering (91x91 pixels, 1.42x scale from 64x64)
--   ✅ Drag-and-drop functionality for pet
--   ✅ House UI panel with show/hide animations
--   ✅ Three needs meters (Hunger, Cleanliness, Happiness) - fully visible
--   ✅ Action buttons (Feed, Clean, Play) with temporary effects
--   ✅ System tray integration with context menu
--   ✅ Exit application functionality (system tray + in-app button)
--   ✅ Proper z-ordering (cat renders on top of house panel)
--   ✅ Correct positioning (house panel doesn't block Windows clock)
-
 **Technical Implementation:**
 
 -   Window: Borderless, maximized, transparent with WS_EX_LAYERED flag
@@ -88,7 +64,6 @@ Test Checklist:
 
 **Known Limitations:**
 
--   Pet is static (no animations yet - Phase 2)
 -   Needs don't degrade over time (Phase 2)
 -   No mouse chasing behavior (Phase 3)
 -   No persistence between sessions (Phase 2)
@@ -100,17 +75,38 @@ Test Checklist:
 
 **Phase 2: Pet Behavior (Week 2-3)**
 
--   Implement state machine for animations
--   Pet sprite sheets are in Resources/Sprites/
--   Add random wandering behavior
--   Implement needs degradation system
+**Sprite Information:**
+
+-   Sprite strips located at: Resources/Sprites/RetroCatsPaid/Cats/Sprites/
+-   Each PNG contains horizontal sprite strip with multiple frames
+-   Frame size: 64x64 pixels
+-   Frame count calculated automatically (width / 64)
+-   Available animations: Idle, Running, Sleeping, Excited, Happy, Jump, Dance, etc.
+
+**Phase 2 Status: ✅ COMPLETE**
+All core pet behavior features implemented and tested successfully:
+
+-   Pet wanders randomly in 2D space with smooth animations
+-   Proper state management (Idle ↔ Walking transitions)
+-   Sprite flipping based on movement direction
+-   Edge detection and bouncing with proper physics
+-   Needs degradation system working
+-   Comprehensive logging for debugging
+-   No known bugs
+
+**TODO (Future Enhancements):**
+
+-   ⏳ Fine-tune animation speeds if needed
+-   ⏳ Adjust wandering behavior parameters (speed, intervals, etc.)
+-   ⏳ Add more animation states (Sleeping, Playing, Eating)
+-   ⏳ Tune needs degration
 
 **Phase 3: Interactions (Week 3-4)**
 
 -   Mouse cursor tracking and chasing behavior
 -   Click interactions (petting, feeding, playing)
 -   Drag-to-house functionality
--   Needs satisfaction mechanics
+-   Needs degration and satisfaction mechanics
 
 **Phase 4: Reminders & Polish (Week 4-5)**
 

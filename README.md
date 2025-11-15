@@ -2,9 +2,10 @@
 
 A desktop companion that lives on your screen. Amicus is a retro-style pixel art cat that keeps you company on your Windows desktop.
 
-![Phase](https://img.shields.io/badge/Phase-1%20Complete-brightgreen)
+![Phase](https://img.shields.io/badge/Phase-2%20Complete-brightgreen)
 ![Framework](https://img.shields.io/badge/.NET-9.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-blue)
+![Status](https://img.shields.io/badge/Status-Active%20Development-yellow)
 
 ## Requirements
 
@@ -50,13 +51,14 @@ Amicus/
 -   **.NET Version**: 9.0
 -   **Language**: C#
 -   **Graphics**: Pixel art sprites with NearestNeighbor scaling
+-   **Logging**: Microsoft.Extensions.Logging (console output)
 
 ## Development Status
 
 | Phase                 | Status      | Features                                                      |
 | --------------------- | ----------- | ------------------------------------------------------------- |
 | Phase 1: Foundation   | ✅ Complete | Transparent window, dragging, house panel, basic interactions |
-| Phase 2: Pet Behavior | 🔄 Planned  | Animations, wandering, needs degradation                      |
+| Phase 2: Pet Behavior | ✅ Complete | Animations, wandering, needs degradation, sprite flipping     |
 | Phase 3: Interactions | 📋 Planned  | Mouse chasing, advanced interactions                          |
 | Phase 4: Polish       | 📋 Planned  | Notifications, settings, sounds                               |
 
