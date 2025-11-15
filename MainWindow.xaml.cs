@@ -411,6 +411,10 @@ namespace AMICUS
                         _animationController.ChangeState(PetState.Idle);
                         _petVelocityX = 0;
                         _petVelocityY = 0;
+
+                        // Reset idle timer and set new interval when transitioning to idle
+                        _idleTimer = 0;
+                        _idleInterval = _random.Next(3, 8);
                     }
                     else
                     {
@@ -446,6 +450,10 @@ namespace AMICUS
                             _animationController.ChangeDirection(PetDirection.Right);
                         else if (_petVelocityX < 0)
                             _animationController.ChangeDirection(PetDirection.Left);
+
+                        // Reset wander timer and set new interval when transitioning to walking
+                        _wanderTimer = 0;
+                        _wanderInterval = _random.Next(2, 5);
                     }
                 }
 
