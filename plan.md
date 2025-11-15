@@ -99,6 +99,7 @@ All core pet behavior features implemented and tested successfully:
 -   ⏳ Fine-tune animation speeds if needed
 -   ⏳ Adjust wandering behavior parameters (speed, intervals, etc.)
 -   ⏳ Add more animation states (Sleeping, Playing, Eating)
+-   ⏳ Tune needs degration
 
 **Phase 3: Interactions (Week 3-4)**
 
