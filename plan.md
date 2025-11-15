@@ -112,25 +112,29 @@ All core pet behavior features implemented and tested successfully:
 -   ✅ Petting cooldown (2 seconds)
 -   ✅ Action animation duration (3 seconds)
 
-**Known Issues (CRITICAL - Must Fix):**
+**Recent Fixes (2025-11-15):**
 
-1. **Attack Animation Bug** (MainWindow.xaml.cs:586-600)
-   - Cat keeps attacking even when mouse is far away
-   - Attack state doesn't properly transition back to chasing
-   - Need to add distance check to exit attack state
-   - Attack should be brief (1-2 seconds max), not continuous
+1. ✅ **Attack Animation Bug FIXED** (MainWindow.xaml.cs:605-643)
+   - Added attack timer and ATTACK_DURATION constant (1.5 seconds)
+   - Attack now properly exits after duration
+   - After attack: resumes chasing if time remains and mouse is far, or ends chase
+   - Attack timer resets when entering attack state
 
-2. **Chasing Behavior Broken** (MainWindow.xaml.cs:610-647)
-   - Cat only moves if mouse is directly over it
-   - Gets stuck in one spot showing running animation but not moving
-   - Velocity calculation appears correct but pet doesn't actually move
-   - Issue likely in position update logic or state management
-   - Direction glitching persists despite cooldown implementation
+2. ✅ **Chasing Behavior FIXED** (MainWindow.xaml.cs:664-706)
+   - Issue was caused by attack state not exiting properly
+   - Chasing now works correctly with attack state properly timed
+   - Added detailed logging for velocity and position during chase
 
-3. **Idle Animation Movement** (MainWindow.xaml.cs:660-715)
-   - Cat sometimes moves around screen while showing idle animation
-   - Velocity not being properly zeroed when transitioning to idle
-   - Need to ensure velocity is cleared on state change to idle
+3. ✅ **Idle Animation Movement FIXED** (MainWindow.xaml.cs:548-578)
+   - Velocity now properly cleared when transitioning to Idle state after actions
+   - Velocity also cleared when transitioning to Playing state
+   - Walking state properly sets new velocity when transitioning
+
+4. ✅ **Enhanced Logging Added**
+   - State transitions now logged with velocity information
+   - Chasing behavior logs velocity, distance, and position
+   - All wandering state changes logged
+   - Helps debug future issues with state management
 
 **Technical Details:**
 
@@ -139,15 +143,16 @@ Current Implementation:
 - Chase duration: 10-15 seconds (randomized)
 - Chase speed: 120 px/s
 - Attack distance: 80px
+- Attack duration: 1.5 seconds
 - Min chase time before attack: 5 seconds
 - Direction change cooldown: 0.2 seconds
 
-**Next Steps:**
-1. Fix attack state - add timer to exit attack after 1-2 seconds
-2. Debug chasing movement - check why pet gets stuck
-3. Fix velocity not clearing properly on idle transitions
-4. Test all state transitions thoroughly
-5. Add more robust logging for debugging state/velocity issues
+**Testing Required:**
+1. ⏳ Test attack animation (should last ~1.5s then exit)
+2. ⏳ Test chasing behavior (should chase smoothly without getting stuck)
+3. ⏳ Test idle animations (should not drift while idle)
+4. ⏳ Test all state transitions (action → idle/playing/walking)
+5. ⏳ Check logs for any unexpected behavior
 
 **Phase 4: Reminders & Polish (Week 4-5)**
 
