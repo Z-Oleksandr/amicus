@@ -128,7 +128,7 @@ Test Checklist:
     -   Fields for needs degradation system
     -   Pet velocity variables for movement
 
-**Completed (Current Session):**
+**Completed (Session 1):**
 -   ✅ Complete MainWindow integration:
     -   ✅ Implemented GameTimer_Tick method (main game loop with 60 FPS update)
     -   ✅ Update animation frames each tick via AnimationController
@@ -147,11 +147,33 @@ Test Checklist:
     -   ✅ Update UI meters automatically
 -   ✅ Fixed nullable reference warnings in AnimationController
 
+**Completed (Session 2 - Logging & Bug Fixes):**
+-   ✅ Added Microsoft.Extensions.Logging framework:
+    -   ✅ Console logging with levels (Debug, Info, Warning, Error, Critical)
+    -   ✅ Replaced MessageBox error popups with console logging
+    -   ✅ Global exception handlers with logging
+-   ✅ Fixed divide by zero error in AnimationController.Update()
+-   ✅ Added comprehensive logging throughout:
+    -   ✅ App startup/shutdown events
+    -   ✅ Window loading and pet initialization
+    -   ✅ Sprite loading with frame counts and dimensions
+    -   ✅ Pet state changes
+    -   ✅ Edge collision detection with debug logging
+    -   ✅ Exception handling with full stack traces
+-   ✅ Fixed sprite direction display:
+    -   ✅ Implemented horizontal sprite flipping using ScaleTransform
+    -   ✅ Sprite now correctly faces left when moving left
+    -   ✅ Sprite faces right when moving right
+-   ✅ Improved edge bouncing behavior:
+    -   ✅ Added minimum bounce velocity (20 pixels/sec) to prevent getting stuck
+    -   ✅ Ensures pet always has enough velocity to move away from edges
+    -   ✅ Added debug logging for edge collisions
+
 **TODO (Testing & Refinement):**
--   ⏳ Test all features together
--   ⏳ Fix any bugs or issues discovered during testing
--   ⏳ Adjust animation speeds if needed
--   ⏳ Tune wandering behavior parameters (speed, intervals, etc.)
+-   ⏳ Test all features together after latest fixes
+-   ⏳ Fine-tune animation speeds if needed
+-   ⏳ Adjust wandering behavior parameters (speed, intervals, etc.)
+-   ⏳ Optimize sprite flipping transform (consider caching)
 
 **Phase 3: Interactions (Week 3-4)**
 

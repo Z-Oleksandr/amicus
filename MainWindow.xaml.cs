@@ -370,6 +370,19 @@ namespace AMICUS
             HappinessBar.Value = _happiness;
         }
 
+        private void UpdateSpriteDirection()
+        {
+            // Flip sprite horizontally when facing left
+            if (_animationController.CurrentDirection == PetDirection.Left)
+            {
+                PetImage.RenderTransform = new ScaleTransform(-1, 1, PetImage.ActualWidth / 2, PetImage.ActualHeight / 2);
+            }
+            else
+            {
+                PetImage.RenderTransform = Transform.Identity;
+            }
+        }
+
         private void GameTimer_Tick(object? sender, EventArgs e)
         {
             try
@@ -441,28 +454,32 @@ namespace AMICUS
                 double newY = _petY + (_petVelocityY * deltaTime);
 
                 // Boundary checking - keep pet on screen and bounce off edges
+                const double MIN_BOUNCE_VELOCITY = 20; // Minimum velocity after bounce
+
                 if (newX < 0)
                 {
                     newX = 0;
-                    _petVelocityX = Math.Abs(_petVelocityX); // Bounce right
+                    _petVelocityX = Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY); // Bounce right with minimum velocity
                     _animationController.ChangeDirection(PetDirection.Right);
+                    App.Logger.LogDebug("Pet hit left edge, bouncing right with velocity {VelocityX}", _petVelocityX);
                 }
                 else if (newX > MainCanvas.ActualWidth - PetImage.ActualWidth)
                 {
                     newX = MainCanvas.ActualWidth - PetImage.ActualWidth;
-                    _petVelocityX = -Math.Abs(_petVelocityX); // Bounce left
+                    _petVelocityX = -Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY); // Bounce left with minimum velocity
                     _animationController.ChangeDirection(PetDirection.Left);
+                    App.Logger.LogDebug("Pet hit right edge, bouncing left with velocity {VelocityX}", _petVelocityX);
                 }
 
                 if (newY < 0)
                 {
                     newY = 0;
-                    _petVelocityY = Math.Abs(_petVelocityY); // Bounce down
+                    _petVelocityY = Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY); // Bounce down with minimum velocity
                 }
                 else if (newY > MainCanvas.ActualHeight - PetImage.ActualHeight)
                 {
                     newY = MainCanvas.ActualHeight - PetImage.ActualHeight;
-                    _petVelocityY = -Math.Abs(_petVelocityY); // Bounce up
+                    _petVelocityY = -Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY); // Bounce up with minimum velocity
                 }
 
                 UpdatePetPosition(newX, newY);
@@ -477,6 +494,9 @@ namespace AMICUS
             {
                 PetImage.Source = currentFrame;
             }
+
+            // Update sprite direction (flip horizontally when facing left)
+            UpdateSpriteDirection();
 
             // Update needs degradation
             _needsTimer += deltaTime;

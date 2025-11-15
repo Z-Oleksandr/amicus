@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Configuration;
 using System.Data;
+using System.Runtime.InteropServices;
 using System.Windows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,12 +13,28 @@ namespace AMICUS
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        [DllImport("kernel32.dll")]
+        private static extern bool AttachConsole(int dwProcessId);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
+
+        private const int ATTACH_PARENT_PROCESS = -1;
+
         public static IServiceProvider ServiceProvider { get; private set; } = null!;
         public static ILogger Logger { get; private set; } = null!;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // Attach to parent console if launched from terminal (PowerShell/CMD)
+            // If no parent console, allocate a new one
+            if (!AttachConsole(ATTACH_PARENT_PROCESS))
+            {
+                // Optional: Uncomment to always show console even when double-clicked
+                // AllocConsole();
+            }
 
             // Configure logging and services
             var services = new ServiceCollection();
