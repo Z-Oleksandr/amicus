@@ -91,6 +91,7 @@ namespace AMICUS
         private const double CHASE_MAX_DURATION = 15.0;
         private const double ATTACK_DISTANCE = 69.0; // Distance to trigger attack animation
         private const double ATTACK_DURATION = 2.0; // Attack animation duration in seconds
+        private const double CHASE_CHANCE = 0.42; // 42% chance to start chasing
 
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
@@ -569,16 +570,26 @@ namespace AMICUS
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
 
-                    // Trigger chase after 2 seconds of proximity
+                    // Trigger chase after 2 seconds of proximity (42% chance)
                     if (_proximityTimer >= PROXIMITY_THRESHOLD)
                     {
-                        // Start chasing!
-                        _isChasing = true;
-                        _chaseTimer = 0;
-                        _chaseDuration = CHASE_MIN_DURATION + (_random.NextDouble() * (CHASE_MAX_DURATION - CHASE_MIN_DURATION));
-                        _animationController.ChangeState(PetState.Chasing);
+                        // Random chance to start chasing
+                        if (_random.NextDouble() < CHASE_CHANCE)
+                        {
+                            // Start chasing!
+                            _isChasing = true;
+                            _chaseTimer = 0;
+                            _chaseDuration = CHASE_MIN_DURATION + (_random.NextDouble() * (CHASE_MAX_DURATION - CHASE_MIN_DURATION));
+                            _animationController.ChangeState(PetState.Chasing);
 
-                        App.Logger.LogInformation("Chase started! Duration: {Duration:F1}s", _chaseDuration);
+                            App.Logger.LogInformation("Chase started! Duration: {Duration:F1}s", _chaseDuration);
+                        }
+                        else
+                        {
+                            // Cat decided not to chase - reset timer to try again
+                            App.Logger.LogDebug("Cat ignored the mouse (no chase triggered)");
+                            _proximityTimer = 0;
+                        }
                     }
                 }
                 else if (!_isChasing)
