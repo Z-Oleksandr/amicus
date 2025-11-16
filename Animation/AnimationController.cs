@@ -87,6 +87,7 @@ namespace AMICUS.Animation
                     PetState.Idle => _spriteManager.GetIdleFrames(),
                     PetState.Walking => _spriteManager.GetRunningFrames(),
                     PetState.Chasing => _spriteManager.GetRunningFrames(),
+                    PetState.Attacking => _spriteManager.GetAttackFrames(),
                     PetState.Sleeping => _spriteManager.GetSleepingFrames(),
                     PetState.Playing => _spriteManager.GetExcitedFrames(),
                     PetState.Eating => _spriteManager.GetHappyFrames(),

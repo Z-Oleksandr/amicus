@@ -83,10 +83,14 @@ namespace AMICUS
         private bool _isChasing = false;
         private double _chaseTimer = 0;
         private double _chaseDuration = 0;
+        private bool _isAttacking = false;
+        private double _attackTimer = 0;
         private const double PROXIMITY_THRESHOLD = 2.0; // Seconds mouse must be within radius to trigger chase
-        private const double CHASE_SPEED = 100.0; // 2x normal speed (50 * 2)
+        private const double CHASE_SPEED = 125.0; // 2.5x normal speed (50 * 2.5)
         private const double CHASE_MIN_DURATION = 10.0;
         private const double CHASE_MAX_DURATION = 15.0;
+        private const double ATTACK_DISTANCE = 69.0; // Distance to trigger attack animation
+        private const double ATTACK_DURATION = 2.0; // Attack animation duration in seconds
 
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
@@ -642,7 +646,9 @@ namespace AMICUS
                 {
                     // End chase
                     _isChasing = false;
+                    _isAttacking = false;
                     _chaseTimer = 0;
+                    _attackTimer = 0;
                     _proximityTimer = 0;
                     _animationController.ChangeState(PetState.Idle);
                     _petVelocityX = 0;
@@ -659,17 +665,56 @@ namespace AMICUS
                     double deltaY = _mousePosition.Y - petCenterY;
                     double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
-                    // Normalize direction and apply chase speed
-                    if (distance > 0)
+                    // Handle attack behavior
+                    if (_isAttacking)
                     {
-                        _petVelocityX = (deltaX / distance) * CHASE_SPEED;
-                        _petVelocityY = (deltaY / distance) * CHASE_SPEED;
+                        // Increment attack timer
+                        _attackTimer += deltaTime;
 
-                        // Update facing direction based on movement
-                        if (_petVelocityX > 0)
-                            _animationController.ChangeDirection(PetDirection.Right);
-                        else if (_petVelocityX < 0)
-                            _animationController.ChangeDirection(PetDirection.Left);
+                        // Stop movement during attack
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+
+                        // Check if attack duration has been reached
+                        if (_attackTimer >= ATTACK_DURATION)
+                        {
+                            // End attack and return to chasing
+                            _isAttacking = false;
+                            _attackTimer = 0;
+                            _animationController.ChangeState(PetState.Chasing);
+
+                            App.Logger.LogInformation("Attack completed, resuming chase");
+                        }
+                    }
+                    else
+                    {
+                        // Check if close enough to attack
+                        if (distance < ATTACK_DISTANCE)
+                        {
+                            // Trigger attack!
+                            _isAttacking = true;
+                            _attackTimer = 0;
+                            _animationController.ChangeState(PetState.Attacking);
+                            _petVelocityX = 0;
+                            _petVelocityY = 0;
+
+                            App.Logger.LogInformation("Attack triggered! Distance: {Distance:F1}px", distance);
+                        }
+                        else
+                        {
+                            // Normal chase movement
+                            if (distance > 0)
+                            {
+                                _petVelocityX = (deltaX / distance) * CHASE_SPEED;
+                                _petVelocityY = (deltaY / distance) * CHASE_SPEED;
+
+                                // Update facing direction based on movement
+                                if (_petVelocityX > 0)
+                                    _animationController.ChangeDirection(PetDirection.Right);
+                                else if (_petVelocityX < 0)
+                                    _animationController.ChangeDirection(PetDirection.Left);
+                            }
+                        }
                     }
                 }
             }
