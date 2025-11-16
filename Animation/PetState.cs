@@ -7,6 +7,7 @@ namespace AMICUS.Animation
     {
         Idle,           // Standing/sitting still
         Walking,        // Moving around
+        Chasing,        // Chasing the mouse cursor
         Sleeping,       // Sleeping with z's
         Playing,        // Playing animation
         Eating          // Eating animation

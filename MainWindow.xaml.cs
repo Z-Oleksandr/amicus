@@ -78,6 +78,16 @@ namespace AMICUS
         private bool _hasMousePosition = false;
         private const double DETECTION_RADIUS = 200.0; // Distance to log mouse position
 
+        // Mouse chasing behavior
+        private double _proximityTimer = 0; // Tracks how long mouse has been within detection radius
+        private bool _isChasing = false;
+        private double _chaseTimer = 0;
+        private double _chaseDuration = 0;
+        private const double PROXIMITY_THRESHOLD = 2.0; // Seconds mouse must be within radius to trigger chase
+        private const double CHASE_SPEED = 100.0; // 2x normal speed (50 * 2)
+        private const double CHASE_MIN_DURATION = 10.0;
+        private const double CHASE_MAX_DURATION = 15.0;
+
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
         private const double PET_COOLDOWN = 2.0; // Cooldown between petting in seconds
@@ -539,8 +549,8 @@ namespace AMICUS
             // Update interaction cooldown timer
             _timeSinceLastInteraction += deltaTime;
 
-            // Track mouse proximity independently of cat's state
-            if (_hasMousePosition)
+            // Mouse proximity detection and chase trigger
+            if (_hasMousePosition && !_isDraggingPet && !_isPerformingAction)
             {
                 // Calculate distance to mouse cursor
                 double petCenterX = _petX + (PetImage.ActualWidth / 2);
@@ -549,11 +559,32 @@ namespace AMICUS
                 double deltaY = _mousePosition.Y - petCenterY;
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
-                // Log when mouse is within detection radius
-                if (distanceToMouse < DETECTION_RADIUS)
+                // Handle proximity timer and chase triggering
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing)
                 {
-                    App.Logger.LogInformation("Mouse within {Radius}px - Distance: {Distance:F1}px | Mouse: ({MouseX:F1}, {MouseY:F1}) | Cat TopLeft: ({PetX:F1}, {PetY:F1}) | Cat Center: ({CatCenterX:F1}, {CatCenterY:F1}) | Cat Size: {Width}x{Height}",
-                        DETECTION_RADIUS, distanceToMouse, _mousePosition.X, _mousePosition.Y, _petX, _petY, petCenterX, petCenterY, PetImage.ActualWidth, PetImage.ActualHeight);
+                    // Mouse is within detection radius - increment proximity timer
+                    _proximityTimer += deltaTime;
+
+                    // Trigger chase after 2 seconds of proximity
+                    if (_proximityTimer >= PROXIMITY_THRESHOLD)
+                    {
+                        // Start chasing!
+                        _isChasing = true;
+                        _chaseTimer = 0;
+                        _chaseDuration = CHASE_MIN_DURATION + (_random.NextDouble() * (CHASE_MAX_DURATION - CHASE_MIN_DURATION));
+                        _animationController.ChangeState(PetState.Chasing);
+
+                        App.Logger.LogInformation("Chase started! Duration: {Duration:F1}s", _chaseDuration);
+                    }
+                }
+                else if (!_isChasing)
+                {
+                    // Mouse is outside detection radius - reset proximity timer
+                    if (_proximityTimer > 0)
+                    {
+                        App.Logger.LogDebug("Mouse left detection radius, resetting proximity timer");
+                    }
+                    _proximityTimer = 0;
                 }
             }
 
@@ -600,8 +631,50 @@ namespace AMICUS
                 }
             }
 
-            // Don't update wandering behavior if pet is being dragged or performing action
-            if (!_isDraggingPet && !_isPerformingAction)
+            // Handle chase movement and duration
+            if (_isChasing)
+            {
+                // Increment chase timer
+                _chaseTimer += deltaTime;
+
+                // Check if chase duration has been reached
+                if (_chaseTimer >= _chaseDuration)
+                {
+                    // End chase
+                    _isChasing = false;
+                    _chaseTimer = 0;
+                    _proximityTimer = 0;
+                    _animationController.ChangeState(PetState.Idle);
+                    _petVelocityX = 0;
+                    _petVelocityY = 0;
+
+                    App.Logger.LogInformation("Chase ended after {Duration:F1}s", _chaseDuration);
+                }
+                else if (_hasMousePosition)
+                {
+                    // Calculate direction to mouse
+                    double petCenterX = _petX + (PetImage.ActualWidth / 2);
+                    double petCenterY = _petY + (PetImage.ActualHeight / 2);
+                    double deltaX = _mousePosition.X - petCenterX;
+                    double deltaY = _mousePosition.Y - petCenterY;
+                    double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                    // Normalize direction and apply chase speed
+                    if (distance > 0)
+                    {
+                        _petVelocityX = (deltaX / distance) * CHASE_SPEED;
+                        _petVelocityY = (deltaY / distance) * CHASE_SPEED;
+
+                        // Update facing direction based on movement
+                        if (_petVelocityX > 0)
+                            _animationController.ChangeDirection(PetDirection.Right);
+                        else if (_petVelocityX < 0)
+                            _animationController.ChangeDirection(PetDirection.Left);
+                    }
+                }
+            }
+            // Don't update wandering behavior if pet is being dragged, performing action, or chasing
+            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing)
             {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
@@ -670,8 +743,11 @@ namespace AMICUS
                         // App.Logger.LogDebug("Wandering: Idle → Walking (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
                     }
                 }
+            }
 
-                // Update pet position based on velocity
+            // Update pet position based on velocity (for both wandering and chasing)
+            if (!_isDraggingPet)
+            {
                 double newX = _petX + (_petVelocityX * deltaTime);
                 double newY = _petY + (_petVelocityY * deltaTime);
 
