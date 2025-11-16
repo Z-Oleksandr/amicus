@@ -9,9 +9,7 @@ namespace AMICUS.Animation
         Walking,        // Moving around
         Sleeping,       // Sleeping with z's
         Playing,        // Playing animation
-        Eating,         // Eating animation
-        Chasing,        // Chasing mouse cursor
-        Attacking       // Attacking/pouncing
+        Eating          // Eating animation
     }
 
     /// <summary>

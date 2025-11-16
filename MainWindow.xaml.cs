@@ -29,6 +29,16 @@ namespace AMICUS
         [DllImport("user32.dll")]
         private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT lpPoint);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
         // Pet dragging state
         private bool _isDraggingPet = false;
         private System.Windows.Point _petDragOffset;
@@ -63,24 +73,10 @@ namespace AMICUS
         private double _needsTimer = 0;
         private const double NEEDS_DECAY_INTERVAL = 30.0; // Decay every 30 seconds
 
-        // Mouse cursor tracking and chasing
+        // Mouse tracking
         private System.Windows.Point _mousePosition;
-        private bool _hasMousePosition = false; // Track if we've received a valid mouse position
-        private bool _isChasingMouse = false;
-        private bool _wasMouseInRange = false; // Track if mouse was in range last check (to detect ENTERING)
-        private double _chaseCheckTimer = 0;
-        private const double CHASE_CHECK_INTERVAL = 2.0; // Check every 2 seconds if should chase
-        private const double CHASE_TRIGGER_DISTANCE = 200.0; // Trigger chase if mouse within this distance (200px radius)
-        private const double CHASE_SPEED = 120; // pixels per second when chasing
-        private const double CHASE_DURATION = 15.0; // Chase duration in seconds
-        private double _chaseTimeRemaining = 0;
-        private const double ATTACK_DISTANCE = 20.0; // Distance to trigger attack animation (20px radius)
-        private const double PROXIMITY_DURATION = 2.0; // Must stay within 20px for 2 seconds to attack
-        private double _proximityTimer = 0; // Track time within attack distance
-
-        // Direction change management to prevent glitching
-        private double _directionChangeTimer = 0;
-        private const double DIRECTION_CHANGE_COOLDOWN = 0.2; // Only allow direction change every 0.2 seconds
+        private bool _hasMousePosition = false;
+        private const double DETECTION_RADIUS = 200.0; // Distance to log mouse position
 
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
@@ -91,10 +87,6 @@ namespace AMICUS
         private double _actionTimer = 0;
         private const double ACTION_DURATION = 3.0; // Duration of action animations in seconds
         private PetState _stateBeforeAction = PetState.Idle;
-
-        // Attack animation
-        private double _attackTimer = 0;
-        private const double ATTACK_DURATION = 1.5; // Duration of attack animation in seconds
 
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
@@ -176,9 +168,6 @@ namespace AMICUS
 
                 // Set up click-through behavior after window is fully loaded
                 this.SourceInitialized += MainWindow_SourceInitialized;
-
-                // Set up mouse tracking for the entire window
-                this.MouseMove += Window_MouseMove;
             }
             catch (Exception ex)
             {
@@ -279,11 +268,26 @@ namespace AMICUS
             Canvas.SetTop(PetImage, y);
         }
 
-        // Mouse tracking for the entire window
-        private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        // Get current mouse position in window coordinates
+        private void UpdateMousePosition()
         {
-            _mousePosition = e.GetPosition(MainCanvas);
-            _hasMousePosition = true;
+            try
+            {
+                // Get cursor position in screen coordinates
+                if (GetCursorPos(out POINT screenPoint))
+                {
+                    // Convert to WPF window coordinates
+                    System.Windows.Point screenPt = new System.Windows.Point(screenPoint.X, screenPoint.Y);
+                    System.Windows.Point windowPt = PointFromScreen(screenPt);
+
+                    _mousePosition = windowPt;
+                    _hasMousePosition = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error updating mouse position");
+            }
         }
 
         // Pet dragging event handlers
@@ -438,8 +442,7 @@ namespace AMICUS
             _hunger = Math.Min(100, _hunger + 25);
             UpdateNeedsDisplay();
 
-            // Stop any chasing behavior
-            _isChasingMouse = false;
+            // Stop any movement
             _petVelocityX = 0;
             _petVelocityY = 0;
 
@@ -459,8 +462,7 @@ namespace AMICUS
             _cleanliness = Math.Min(100, _cleanliness + 25);
             UpdateNeedsDisplay();
 
-            // Stop any chasing behavior
-            _isChasingMouse = false;
+            // Stop any movement
             _petVelocityX = 0;
             _petVelocityY = 0;
 
@@ -480,8 +482,7 @@ namespace AMICUS
             _happiness = Math.Min(100, _happiness + 25);
             UpdateNeedsDisplay();
 
-            // Stop any chasing behavior
-            _isChasingMouse = false;
+            // Stop any movement
             _petVelocityX = 0;
             _petVelocityY = 0;
 
@@ -532,11 +533,29 @@ namespace AMICUS
                 double deltaTime = (currentTime - _lastUpdateTime).TotalSeconds;
                 _lastUpdateTime = currentTime;
 
+            // Update mouse position every frame
+            UpdateMousePosition();
+
             // Update interaction cooldown timer
             _timeSinceLastInteraction += deltaTime;
 
-            // Update direction change cooldown timer
-            _directionChangeTimer += deltaTime;
+            // Track mouse proximity independently of cat's state
+            if (_hasMousePosition)
+            {
+                // Calculate distance to mouse cursor
+                double petCenterX = _petX + (PetImage.ActualWidth / 2);
+                double petCenterY = _petY + (PetImage.ActualHeight / 2);
+                double deltaX = _mousePosition.X - petCenterX;
+                double deltaY = _mousePosition.Y - petCenterY;
+                double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                // Log when mouse is within detection radius
+                if (distanceToMouse < DETECTION_RADIUS)
+                {
+                    App.Logger.LogInformation("Mouse within {Radius}px - Distance: {Distance:F1}px | Mouse: ({MouseX:F1}, {MouseY:F1}) | Cat TopLeft: ({PetX:F1}, {PetY:F1}) | Cat Center: ({CatCenterX:F1}, {CatCenterY:F1}) | Cat Size: {Width}x{Height}",
+                        DETECTION_RADIUS, distanceToMouse, _mousePosition.X, _mousePosition.Y, _petX, _petY, petCenterX, petCenterY, PetImage.ActualWidth, PetImage.ActualHeight);
+                }
+            }
 
             // Handle action animations (eating, playing, etc.)
             if (_isPerformingAction)
@@ -581,176 +600,9 @@ namespace AMICUS
                 }
             }
 
-            // Don't update wandering/chasing behavior if pet is being dragged or performing action
+            // Don't update wandering behavior if pet is being dragged or performing action
             if (!_isDraggingPet && !_isPerformingAction)
             {
-                // Only track mouse if we have a valid position (mouse has moved at least once)
-                if (_hasMousePosition)
-                {
-                    // Calculate distance to mouse cursor
-                    double petCenterX = _petX + (PetImage.ActualWidth / 2);
-                    double petCenterY = _petY + (PetImage.ActualHeight / 2);
-                    double deltaX = _mousePosition.X - petCenterX;
-                    double deltaY = _mousePosition.Y - petCenterY;
-                    double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-
-                    // Update chase check timer
-                    _chaseCheckTimer += deltaTime;
-
-                    // Check if we should start chasing (only when mouse ENTERS the radius)
-                    if (!_isChasingMouse && _chaseCheckTimer >= CHASE_CHECK_INTERVAL)
-                    {
-                        _chaseCheckTimer = 0;
-
-                        bool isMouseInRange = distanceToMouse < CHASE_TRIGGER_DISTANCE;
-
-                        // Only start chasing if mouse ENTERED the radius (was outside, now inside)
-                        if (isMouseInRange && !_wasMouseInRange)
-                        {
-                            _isChasingMouse = true;
-                            _chaseTimeRemaining = CHASE_DURATION;
-                            _proximityTimer = 0; // Reset proximity timer
-                            _directionChangeTimer = DIRECTION_CHANGE_COOLDOWN; // Allow immediate direction change when starting
-                            _animationController.ChangeState(PetState.Chasing);
-
-                            // Set initial direction toward mouse
-                            if (deltaX > 0)
-                                _animationController.ChangeDirection(PetDirection.Right);
-                            else if (deltaX < 0)
-                                _animationController.ChangeDirection(PetDirection.Left);
-
-                            App.Logger.LogInformation("Started chasing mouse! Mouse ENTERED {Radius}px radius. Duration: {Duration}s, Distance: {Distance}px",
-                                CHASE_TRIGGER_DISTANCE, _chaseTimeRemaining, distanceToMouse);
-                        }
-
-                        // Update the range tracking for next check
-                        _wasMouseInRange = isMouseInRange;
-                    }
-
-                // Handle mouse chasing behavior
-                if (_isChasingMouse)
-                {
-                    _chaseTimeRemaining -= deltaTime;
-
-                    // Handle attack animation
-                    if (_animationController.CurrentState == PetState.Attacking)
-                    {
-                        _attackTimer += deltaTime;
-
-                        // Exit attack after duration - always end chase after attack
-                        if (_attackTimer >= ATTACK_DURATION)
-                        {
-                            _attackTimer = 0;
-                            _isChasingMouse = false;
-                            _proximityTimer = 0;
-                            _petVelocityX = 0;
-                            _petVelocityY = 0;
-                            _chaseCheckTimer = 0; // Reset check timer to delay next chase trigger
-                            _wasMouseInRange = false; // Reset range tracking so mouse must re-enter to trigger again
-                            _animationController.ChangeState(PetState.Idle);
-                            App.Logger.LogInformation("Attack finished - ending chase, returning to normal behavior");
-                        }
-                    }
-                    // Check if we should start attacking (must stay within 20px for 2 seconds)
-                    else if (_animationController.CurrentState == PetState.Chasing)
-                    {
-                        if (distanceToMouse < ATTACK_DISTANCE)
-                        {
-                            // Within attack distance - increment proximity timer
-                            _proximityTimer += deltaTime;
-                            App.Logger.LogDebug("Within attack range: proximity timer = {ProximityTimer:F2}s, distance = {Distance:F1}px",
-                                _proximityTimer, distanceToMouse);
-
-                            // Trigger attack if stayed within range for 2 seconds
-                            if (_proximityTimer >= PROXIMITY_DURATION)
-                            {
-                                _animationController.ChangeState(PetState.Attacking);
-                                _petVelocityX = 0;
-                                _petVelocityY = 0;
-                                _attackTimer = 0;
-                                App.Logger.LogInformation("Attack triggered! Cat stayed within {Distance}px for {Duration}s",
-                                    ATTACK_DISTANCE, PROXIMITY_DURATION);
-                            }
-                        }
-                        else
-                        {
-                            // Outside attack distance - reset proximity timer
-                            if (_proximityTimer > 0)
-                            {
-                                App.Logger.LogDebug("Left attack range - resetting proximity timer (was {ProximityTimer:F2}s)", _proximityTimer);
-                                _proximityTimer = 0;
-                            }
-                        }
-                    }
-
-                    // Move toward mouse if not attacking
-                    if (_animationController.CurrentState == PetState.Chasing)
-                    {
-                        // Calculate direction to mouse and normalize
-                        double distanceToTarget = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-
-                        if (distanceToTarget > 0.1) // Prevent division by zero
-                        {
-                            // Apply deceleration when getting close to prevent oscillation
-                            double speed = CHASE_SPEED;
-                            const double DECEL_START_DISTANCE = 50.0; // Start slowing down at 50px
-                            const double MIN_SPEED = 20.0; // Minimum speed when very close
-
-                            if (distanceToTarget < DECEL_START_DISTANCE)
-                            {
-                                // Smoothly decelerate as we get closer
-                                // At 50px: full speed, at 0px: min speed
-                                double speedFactor = distanceToTarget / DECEL_START_DISTANCE;
-                                speed = MIN_SPEED + (CHASE_SPEED - MIN_SPEED) * speedFactor;
-                            }
-
-                            // Set velocity toward mouse with calculated speed
-                            _petVelocityX = (deltaX / distanceToTarget) * speed;
-                            _petVelocityY = (deltaY / distanceToTarget) * speed;
-
-                            // Set facing direction with cooldown to prevent rapid flipping
-                            if (_directionChangeTimer >= DIRECTION_CHANGE_COOLDOWN)
-                            {
-                                // Only change direction if X velocity is significant
-                                if (Math.Abs(deltaX) > 10) // Horizontal movement must be at least 10 pixels
-                                {
-                                    if (_petVelocityX > 0 && _animationController.CurrentDirection != PetDirection.Right)
-                                    {
-                                        _animationController.ChangeDirection(PetDirection.Right);
-                                        _directionChangeTimer = 0;
-                                    }
-                                    else if (_petVelocityX < 0 && _animationController.CurrentDirection != PetDirection.Left)
-                                    {
-                                        _animationController.ChangeDirection(PetDirection.Left);
-                                        _directionChangeTimer = 0;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Check if chase should end (15 second timeout)
-                    if (_chaseTimeRemaining <= 0)
-                    {
-                        _isChasingMouse = false;
-                        _proximityTimer = 0;
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        _chaseCheckTimer = 0; // Reset check timer to delay next chase trigger
-                        _wasMouseInRange = false; // Reset range tracking so mouse must re-enter to trigger again
-
-                        // Return to normal behavior - go to Idle
-                        _animationController.ChangeState(PetState.Idle);
-                        App.Logger.LogInformation("Chase timeout (15s) - returning to normal behavior");
-
-                        // Reset timers for normal wandering
-                        _idleTimer = 0;
-                        _idleInterval = _random.Next(3, 8);
-                    }
-                }
-                // Normal wandering behavior when not chasing
-                else
-                {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
                 _idleTimer += deltaTime;
@@ -772,7 +624,7 @@ namespace AMICUS
                         _idleTimer = 0;
                         _idleInterval = _random.Next(3, 8);
 
-                        App.Logger.LogDebug("Wandering: Walking → Idle (velocity cleared)");
+                        // App.Logger.LogDebug("Wandering: Walking → Idle (velocity cleared)");
                     }
                     else
                     {
@@ -786,7 +638,7 @@ namespace AMICUS
                         else if (_petVelocityX < 0)
                             _animationController.ChangeDirection(PetDirection.Left);
 
-                        App.Logger.LogDebug("Wandering: Changed direction (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
+                        // App.Logger.LogDebug("Wandering: Changed direction (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
                     }
                 }
 
@@ -815,69 +667,7 @@ namespace AMICUS
                         _wanderTimer = 0;
                         _wanderInterval = _random.Next(2, 5);
 
-                        App.Logger.LogDebug("Wandering: Idle → Walking (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
-                    }
-                }
-                } // End of normal wandering else block
-                } // End of _hasMousePosition check
-                // If no mouse position yet, just do normal wandering behavior
-                else
-                {
-                    // Update wandering behavior timers
-                    _wanderTimer += deltaTime;
-                    _idleTimer += deltaTime;
-
-                    // Random direction changes during walking
-                    if (_animationController.CurrentState == PetState.Walking && _wanderTimer >= _wanderInterval)
-                    {
-                        _wanderTimer = 0;
-                        _wanderInterval = _random.Next(2, 5);
-
-                        // Random chance to go idle (30% chance)
-                        if (_random.NextDouble() < 0.3)
-                        {
-                            _animationController.ChangeState(PetState.Idle);
-                            _petVelocityX = 0;
-                            _petVelocityY = 0;
-                            _idleTimer = 0;
-                            _idleInterval = _random.Next(3, 8);
-                        }
-                        else
-                        {
-                            // Change direction randomly
-                            _petVelocityX = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
-                            _petVelocityY = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
-
-                            // Set facing direction
-                            if (_petVelocityX > 0)
-                                _animationController.ChangeDirection(PetDirection.Right);
-                            else if (_petVelocityX < 0)
-                                _animationController.ChangeDirection(PetDirection.Left);
-                        }
-                    }
-
-                    // Random transitions from idle to walking
-                    if (_animationController.CurrentState == PetState.Idle && _idleTimer >= _idleInterval)
-                    {
-                        _idleTimer = 0;
-                        _idleInterval = _random.Next(3, 8);
-
-                        // Random chance to start walking (50% chance)
-                        if (_random.NextDouble() < 0.5)
-                        {
-                            _animationController.ChangeState(PetState.Walking);
-                            _petVelocityX = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
-                            _petVelocityY = (_random.NextDouble() - 0.5) * 2 * PET_SPEED;
-
-                            // Set facing direction
-                            if (_petVelocityX > 0)
-                                _animationController.ChangeDirection(PetDirection.Right);
-                            else if (_petVelocityX < 0)
-                                _animationController.ChangeDirection(PetDirection.Left);
-
-                            _wanderTimer = 0;
-                            _wanderInterval = _random.Next(2, 5);
-                        }
+                        // App.Logger.LogDebug("Wandering: Idle → Walking (velocity=({VX:F1}, {VY:F1}))", _petVelocityX, _petVelocityY);
                     }
                 }
 
@@ -891,85 +681,27 @@ namespace AMICUS
                 if (newX < 0)
                 {
                     newX = 0;
-                    if (_isChasingMouse)
-                    {
-                        // Stop chasing if hit edge
-                        _isChasingMouse = false;
-                        _proximityTimer = 0;
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        _chaseCheckTimer = 0; // Reset check timer
-                        _wasMouseInRange = false; // Reset range tracking
-                        _animationController.ChangeState(PetState.Idle);
-                        App.Logger.LogInformation("Chase stopped - hit left edge");
-                    }
-                    else
-                    {
-                        _petVelocityX = Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
-                        _animationController.ChangeDirection(PetDirection.Right);
-                        App.Logger.LogDebug("Pet hit left edge");
-                    }
+                    _petVelocityX = Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
+                    _animationController.ChangeDirection(PetDirection.Right);
+                    // App.Logger.LogDebug("Pet hit left edge");
                 }
                 else if (newX > MainCanvas.ActualWidth - PetImage.ActualWidth)
                 {
                     newX = MainCanvas.ActualWidth - PetImage.ActualWidth;
-                    if (_isChasingMouse)
-                    {
-                        // Stop chasing if hit edge
-                        _isChasingMouse = false;
-                        _proximityTimer = 0;
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        _chaseCheckTimer = 0; // Reset check timer
-                        _wasMouseInRange = false; // Reset range tracking
-                        _animationController.ChangeState(PetState.Idle);
-                        App.Logger.LogInformation("Chase stopped - hit right edge");
-                    }
-                    else
-                    {
-                        _petVelocityX = -Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
-                        _animationController.ChangeDirection(PetDirection.Left);
-                        App.Logger.LogDebug("Pet hit right edge");
-                    }
+                    _petVelocityX = -Math.Max(Math.Abs(_petVelocityX), MIN_BOUNCE_VELOCITY);
+                    _animationController.ChangeDirection(PetDirection.Left);
+                    // App.Logger.LogDebug("Pet hit right edge");
                 }
 
                 if (newY < 0)
                 {
                     newY = 0;
-                    if (_isChasingMouse)
-                    {
-                        _isChasingMouse = false;
-                        _proximityTimer = 0;
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        _chaseCheckTimer = 0; // Reset check timer
-                        _wasMouseInRange = false; // Reset range tracking
-                        _animationController.ChangeState(PetState.Idle);
-                        App.Logger.LogInformation("Chase stopped - hit top edge");
-                    }
-                    else
-                    {
-                        _petVelocityY = Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
-                    }
+                    _petVelocityY = Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
                 }
                 else if (newY > MainCanvas.ActualHeight - PetImage.ActualHeight)
                 {
                     newY = MainCanvas.ActualHeight - PetImage.ActualHeight;
-                    if (_isChasingMouse)
-                    {
-                        _isChasingMouse = false;
-                        _proximityTimer = 0;
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        _chaseCheckTimer = 0; // Reset check timer
-                        _wasMouseInRange = false; // Reset range tracking
-                        _animationController.ChangeState(PetState.Idle);
-                        App.Logger.LogInformation("Chase stopped - hit bottom edge");
-                    }
-                    else
-                    {
-                        _petVelocityY = -Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
-                    }
+                    _petVelocityY = -Math.Max(Math.Abs(_petVelocityY), MIN_BOUNCE_VELOCITY);
                 }
 
                 UpdatePetPosition(newX, newY);
