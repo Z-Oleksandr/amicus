@@ -110,26 +110,50 @@ All core pet behavior features implemented and tested successfully:
 -   ✅ Petting cooldown (2 seconds)
 -   ✅ Action animation duration (3 seconds)
 
-**Work Session (2025-11-16) - Chase Logic Removed:**
+**Work Session (2025-11-17) - Mouse Chasing & Attack System Implemented:**
 
-All chase/attack logic has been completely removed from the codebase to allow for a fresh reimplementation:
+Successfully implemented complete mouse chasing and attack behavior with clean architecture:
 
-**Removed:**
-1. All mouse tracking and chasing variables and constants
-2. Chase/attack state machine logic
-3. Proximity detection and attack triggering
-4. Chase timeout and edge collision handling
-5. `PetState.Chasing` and `PetState.Attacking` enum values
-6. Chase-specific animation mappings
+**Implemented Features:**
+1. ✅ Mouse position tracking using Win32 API (GetCursorPos)
+2. ✅ Proximity detection (200px radius)
+3. ✅ Chase trigger system:
+   - 2-second proximity timer before triggering
+   - 42% chance to start chasing (adds personality!)
+   - Logs when cat ignores the mouse
+4. ✅ Chase behavior:
+   - Duration: Random 10-15 seconds
+   - Speed: 2.5x normal speed (125 px/s)
+   - Continues for full duration regardless of mouse distance
+   - Uses Running.png animation
+5. ✅ Attack behavior:
+   - Triggers when distance < 69px during chase
+   - Plays Attack.png animation for 2 seconds
+   - Can attack multiple times during single chase
+   - Resumes chasing after each attack
+6. ✅ New PetState enums: `Chasing` and `Attacking`
+7. ✅ Clean state management and logging
 
-**Current State:**
-- Pet performs normal wandering behavior (idle ↔ walking transitions)
-- Pet can be clicked (petting), dragged, and interacted with via house buttons
-- No mouse chasing functionality
-- Ready for reimplementation of chasing from scratch
+**Technical Implementation:**
+- Mouse tracking: `MainWindow.xaml.cs:272-291` (UpdateMousePosition)
+- Chase trigger: `MainWindow.xaml.cs:567-603` (proximity timer + random chance)
+- Chase movement: `MainWindow.xaml.cs:638-720` (chase & attack logic)
+- State definitions: `Animation/PetState.cs:10-11`
+- Animation mapping: `Animation/AnimationController.cs:89-90`
 
-**TODO (Next Session):**
-1. ⏳ Reimplement mouse chasing behavior from scratch with better architecture
+**Behavior Flow:**
+```
+Mouse within 200px for 2s → 42% chance → Chase starts (10-15s) →
+Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends → Idle
+```
+
+**Known Issues/Future Enhancements:**
+- None currently - behavior working as designed
+
+**TODO (Future Sessions):**
+1. ⏳ Fine-tune chase/attack parameters if needed
+2. ⏳ Add sound effects for chase and attack
+3. ⏳ Consider adding visual effects (dust clouds, etc.)
 
 **Phase 4: Reminders & Polish (Week 4-5)**
 
