@@ -65,6 +65,25 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Toggle House Button Style with Rounded Corners -->
+        <Style x:Key="RoundedToggleButton" TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="12"
+                                BorderThickness="0">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="3" Opacity="0.5"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Grid x:Name="MainCanvas" Background="Transparent">
         <!-- House Room Panel (Bottom-right corner) -->
@@ -298,10 +317,8 @@
                 VerticalAlignment="Bottom"
                 Margin="0,0,20,60"
                 Click="ToggleHouseButton_Click"
-                Cursor="Hand">
-            <Button.Effect>
-                <DropShadowEffect BlurRadius="10" ShadowDepth="3" Opacity="0.5"/>
-            </Button.Effect>
+                Cursor="Hand"
+                Style="{StaticResource RoundedToggleButton}">
         </Button>
 
         <!-- Pet will be rendered here (on top of everything else) -->
