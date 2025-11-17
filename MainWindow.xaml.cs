@@ -9,8 +9,10 @@ using System.Windows.Media.Imaging;
 using System.Drawing;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using WinForms = System.Windows.Forms;
 using AMICUS.Animation;
+using Amicus.UI;
 
 namespace AMICUS
 {
@@ -58,6 +60,10 @@ namespace AMICUS
         // Animation system
         private AnimationController _animationController;
 
+        // Room management
+        private RoomManager _roomManager;
+        private DecorationManager _decorationManager;
+
         // Game loop timer
         private DispatcherTimer _gameTimer;
         private DateTime _lastUpdateTime;
@@ -97,6 +103,13 @@ namespace AMICUS
         private const double ATTACK_DURATION = 2.0; // Attack animation duration in seconds
         private const double CHASE_CHANCE = 0.42; // 42% chance to start chasing
 
+        // Chase cooldown (prevents chasing immediately after a chase)
+        private bool _chaseCooldownActive = false;
+        private double _chaseCooldownTimer = 0;
+        private double _chaseCooldownDuration = 0;
+        private const double CHASE_COOLDOWN_MIN = 30.0; // Minimum cooldown in seconds
+        private const double CHASE_COOLDOWN_MAX = 300.0; // Maximum cooldown in seconds (5 minutes)
+
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
         private const double PET_COOLDOWN = 2.0; // Cooldown between petting in seconds
@@ -110,6 +123,27 @@ namespace AMICUS
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
 
+        // Pet in room state
+        private bool _isPetInRoom = false;
+        private bool _isRoomLocked = false;
+        private bool _isDraggingPetFromRoom = false;
+        private System.Windows.Point _petInRoomDragOffset;
+        private double _exitRoomTimer = 0;
+        private double _exitRoomInterval = 50.0; // Initial interval value = 50 seconds
+
+        // Food bowl state
+        private bool _isFoodBowlFull = false;
+        private const double FOOD_BOWL_FILL_AMOUNT = 75.0;
+        private const double AUTO_EAT_THRESHOLD = 60.0;
+        private System.Windows.Controls.Image? _foodBowlImage = null;
+
+        // Walk to house to eat state
+        private bool _isWalkingToHouse = false;
+        private bool _shouldEatAfterEntering = false;
+        private double _walkToHouseTimer = 0;
+        private const double WALK_TO_HOUSE_TIMEOUT = 30.0; // Give up after 30 seconds
+        private const double WALK_TO_HOUSE_SPEED = 100.0; // Faster walking when hungry
+
         public MainWindow()
         {
             InitializeComponent();
@@ -118,6 +152,11 @@ namespace AMICUS
             // Initialize animation system
             _animationController = new AnimationController();
             _random = new Random();
+
+            // Initialize room manager
+            var loggerFactory = App.ServiceProvider.GetRequiredService<ILoggerFactory>();
+            _roomManager = new RoomManager(loggerFactory.CreateLogger<RoomManager>());
+            _decorationManager = new DecorationManager(loggerFactory.CreateLogger<DecorationManager>());
 
             // Setup game loop timer (60 FPS)
             _gameTimer = new DispatcherTimer();
@@ -173,8 +212,8 @@ namespace AMICUS
                 // Set initial pet position
                 UpdatePetPosition(_petX, _petY);
 
-                // Update needs display
-                UpdateNeedsDisplay();
+                // Load the default room
+                LoadRoom();
 
                 // Initialize pet to idle state
                 _animationController.ChangeState(PetState.Idle);
@@ -191,6 +230,128 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Error during window load");
+            }
+        }
+
+        private void LoadRoom()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading room...");
+                var roomImage = _roomManager.LoadDefaultRoom();
+                RoomImage.Source = roomImage;
+
+                // Load close button arrow
+                var arrowImage = new BitmapImage();
+                arrowImage.BeginInit();
+                arrowImage.UriSource = new Uri("Resources/elements/navigation/right_arrow.png", UriKind.Relative);
+                arrowImage.CacheOption = BitmapCacheOption.OnLoad;
+                arrowImage.EndInit();
+                CloseHouseArrow.Source = arrowImage;
+
+                // Load unlocked icon (default state)
+                UpdateLockIcon();
+
+                // Load message bubble background
+                var messageBubbleImage = new BitmapImage();
+                messageBubbleImage.BeginInit();
+                messageBubbleImage.UriSource = new Uri("Resources/elements/control/message_bubble.png", UriKind.Relative);
+                messageBubbleImage.CacheOption = BitmapCacheOption.OnLoad;
+                messageBubbleImage.EndInit();
+                MessageBubbleImage.Source = messageBubbleImage;
+
+                // Load all decorations
+                _decorationManager.LoadAllDecorations();
+
+                // Place decorations - positioning iteratively
+                _decorationManager.PlaceDecoration("bed", 0, 12, 117, 0.5);
+                _decorationManager.PlaceDecoration("foodbowl_empty", 0, 127, 150, 0.69);
+                _decorationManager.PlaceDecoration("climber1", 0, 90, 19, 0.59);
+                _decorationManager.PlaceDecoration("window_right", 0, 160, 47, 0.59);
+                _decorationManager.PlaceDecoration("window_left", 0, 40, 33, 0.59);
+                _decorationManager.PlaceDecoration("table", 0, 175, 115, 0.69);
+                _decorationManager.PlaceDecoration("picture2", 0, 10, 80, 1);
+                _decorationManager.PlaceDecoration("picture1", 0, 198, 75, 0.69);
+                _decorationManager.PlaceDecoration("mouse", 0, 80, 105, 0.49);
+                _decorationManager.PlaceDecoration("plant_small", 0, 185, 110, 0.69);
+                _decorationManager.PlaceDecoration("toy_fish", 0, 120, 110, 0.49);
+
+
+
+                // Render decorations on the canvas
+                RenderDecorations();
+
+                App.Logger.LogInformation("Room loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load room");
+            }
+        }
+
+        private void RenderDecorations()
+        {
+            try
+            {
+                // Clear existing decorations from canvas
+                DecorationsCanvas.Children.Clear();
+
+                // Get all placed decorations
+                var placedDecorations = _decorationManager.GetPlacedDecorations();
+
+                foreach (var placed in placedDecorations)
+                {
+                    // Check if this is a food bowl - use appropriate state
+                    string decorationName = placed.DecorationName;
+                    if (decorationName == "foodbowl_empty" || decorationName == "foodbowl_full")
+                    {
+                        // Use the correct bowl based on state
+                        decorationName = _isFoodBowlFull ? "foodbowl_full" : "foodbowl_empty";
+                    }
+
+                    var decoration = _decorationManager.GetDecoration(decorationName);
+                    if (decoration == null || placed.VariantIndex >= decoration.Variants.Count)
+                    {
+                        continue;
+                    }
+
+                    // Create an Image element for this decoration
+                    var image = new System.Windows.Controls.Image
+                    {
+                        Source = decoration.Variants[placed.VariantIndex],
+                        Stretch = Stretch.None
+                    };
+                    RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+
+                    // Apply scale transform if needed
+                    if (placed.Scale != 1.0)
+                    {
+                        var scaleTransform = new ScaleTransform(placed.Scale, placed.Scale);
+                        image.RenderTransform = scaleTransform;
+                        image.RenderTransformOrigin = new System.Windows.Point(0, 0);
+                    }
+
+                    // Position the image on the canvas
+                    Canvas.SetLeft(image, placed.X);
+                    Canvas.SetTop(image, placed.Y);
+
+                    // Make food bowl clickable
+                    if (placed.DecorationName == "foodbowl_empty" || placed.DecorationName == "foodbowl_full")
+                    {
+                        image.MouseLeftButtonDown += FoodBowl_MouseLeftButtonDown;
+                        image.Cursor = System.Windows.Input.Cursors.Hand;
+                        _foodBowlImage = image;
+                    }
+
+                    // Add to canvas
+                    DecorationsCanvas.Children.Add(image);
+                }
+
+                App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to render decorations");
             }
         }
 
@@ -377,9 +538,120 @@ namespace AMICUS
                     ShowHousePanel();
                 }
 
-                // Increase happiness for bringing pet home
-                _happiness = Math.Min(100, _happiness + 5);
-                UpdateNeedsDisplay();
+                // If house panel is visible, transition pet into room
+                if (HousePanel.Visibility == Visibility.Visible)
+                {
+                    TransitionPetIntoRoom();
+                }
+                else
+                {
+                    // Increase happiness for bringing pet home
+                    _happiness = Math.Min(100, _happiness + 5);
+                    UpdateNeedsDisplay();
+                }
+            }
+        }
+
+        private void TransitionPetIntoRoom()
+        {
+            App.Logger.LogInformation("Transitioning pet into room");
+
+            // Hide pet from desktop
+            PetImage.Visibility = Visibility.Collapsed;
+
+            // Set pet state to InRoom
+            _isPetInRoom = true;
+            _animationController.ChangeState(PetState.InRoom);
+
+            // Stop any movement
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+            _isChasing = false;
+            _isAttacking = false;
+            _isPerformingAction = false;
+
+            // Show pet in room at bed position (bed is at 12, 117 with scale 0.5)
+            // Pet should be positioned on the bed (28px up from bed decoration)
+            Canvas.SetLeft(PetInRoomImage, 12);
+            Canvas.SetTop(PetInRoomImage, 90);
+
+            // Scale down the pet in the room to 0.8x
+            PetInRoomImage.RenderTransform = new ScaleTransform(0.8, 0.8);
+            PetInRoomImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+
+            PetInRoomCanvas.Visibility = Visibility.Visible;
+
+            // Reset exit timer
+            _exitRoomTimer = 0;
+            _exitRoomInterval = _random.Next(30, 60); // Random 30-60 seconds
+
+            // Increase happiness for being in room
+            _happiness = Math.Min(100, _happiness + 5);
+            UpdateNeedsDisplay();
+
+            // Check if pet entered room to eat from food bowl
+            if (_shouldEatAfterEntering && _isFoodBowlFull)
+            {
+                // Schedule eating to happen after a short delay (1 second)
+                var eatTimer = new DispatcherTimer();
+                eatTimer.Interval = TimeSpan.FromSeconds(1.0);
+                eatTimer.Tick += (s, e) =>
+                {
+                    eatTimer.Stop();
+
+                    // Cat eats from the bowl
+                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                    _isFoodBowlFull = false;
+
+                    // Re-render decorations to show empty bowl
+                    RenderDecorations();
+
+                    UpdateNeedsDisplay();
+                    App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                };
+                eatTimer.Start();
+
+                // Reset the flag
+                _shouldEatAfterEntering = false;
+            }
+        }
+
+        private void TransitionPetOutOfRoom()
+        {
+            App.Logger.LogInformation("Transitioning pet out of room");
+
+            // Hide pet from room
+            PetInRoomCanvas.Visibility = Visibility.Collapsed;
+
+            // Set pet state back to normal
+            _isPetInRoom = false;
+
+            // Show pet on desktop near the house button
+            PetImage.Visibility = Visibility.Visible;
+            _petX = MainCanvas.ActualWidth - 300;
+            _petY = MainCanvas.ActualHeight - 200;
+            UpdatePetPosition(_petX, _petY);
+
+            // Set to idle state
+            _animationController.ChangeState(PetState.Idle);
+        }
+
+        private void UpdateLockIcon()
+        {
+            try
+            {
+                var lockImage = new BitmapImage();
+                lockImage.BeginInit();
+                lockImage.UriSource = new Uri(_isRoomLocked ?
+                    "Resources/elements/control/locked.png" :
+                    "Resources/elements/control/unlocked.png", UriKind.Relative);
+                lockImage.CacheOption = BitmapCacheOption.OnLoad;
+                lockImage.EndInit();
+                LockRoomIcon.Source = lockImage;
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load lock icon");
             }
         }
 
@@ -438,6 +710,9 @@ namespace AMICUS
 
         private void HideHousePanel()
         {
+            // Hide message bubble when house closes
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+
             // Animate the panel sliding out
             var slideOut = new ThicknessAnimation
             {
@@ -523,8 +798,148 @@ namespace AMICUS
             }
         }
 
+        // Food bowl event handlers
+        private void FoodBowl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Show message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Visible;
+            e.Handled = true;
+            App.Logger.LogInformation("Food bowl clicked - showing message bubble");
+        }
+
+        private void FoodBowlYesButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Hide message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+
+            // Check if bowl is already full
+            if (_isFoodBowlFull)
+            {
+                App.Logger.LogInformation("Food bowl is already full");
+                return;
+            }
+
+            // Fill the bowl
+            _isFoodBowlFull = true;
+            RenderDecorations(); // Re-render to show full bowl
+
+            App.Logger.LogInformation("Food bowl filled");
+        }
+
+        private void FoodBowlNoButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Just hide the message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+            App.Logger.LogInformation("Food bowl fill cancelled");
+        }
+
+        private void LockRoomButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isRoomLocked = !_isRoomLocked;
+            UpdateLockIcon();
+            App.Logger.LogInformation("Room {Status}", _isRoomLocked ? "locked" : "unlocked");
+        }
+
+        // Pet in room dragging event handlers
+        private void PetInRoomImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _isDraggingPetFromRoom = true;
+            // Store where in the image we clicked
+            _petInRoomDragOffset = e.GetPosition(PetInRoomImage);
+
+            // Reset scale to normal size when grabbed
+            PetInRoomImage.RenderTransform = Transform.Identity;
+
+            PetInRoomImage.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void PetInRoomImage_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isDraggingPetFromRoom)
+            {
+                _isDraggingPetFromRoom = false;
+                PetInRoomImage.ReleaseMouseCapture();
+
+                // Check if pet was dragged out of the room
+                CheckDragOutOfRoom();
+
+                e.Handled = true;
+            }
+        }
+
+        private void PetInRoomImage_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (_isDraggingPetFromRoom && e.LeftButton == MouseButtonState.Pressed)
+            {
+                // Get mouse position relative to room canvas
+                System.Windows.Point currentPosition = e.GetPosition(PetInRoomCanvas);
+
+                // Calculate new position (mouse position - offset)
+                double newX = currentPosition.X - _petInRoomDragOffset.X;
+                double newY = currentPosition.Y - _petInRoomDragOffset.Y;
+
+                // Update position (can go outside room bounds)
+                Canvas.SetLeft(PetInRoomImage, newX);
+                Canvas.SetTop(PetInRoomImage, newY);
+                e.Handled = true;
+            }
+        }
+
+        private void CheckDragOutOfRoom()
+        {
+            // Get pet position in room canvas
+            double petXInRoom = Canvas.GetLeft(PetInRoomImage);
+            double petYInRoom = Canvas.GetTop(PetInRoomImage);
+
+            // Get room canvas position in main canvas
+            System.Windows.Point roomPosition = PetInRoomCanvas.TransformToAncestor(MainCanvas).Transform(new System.Windows.Point(0, 0));
+
+            // Calculate pet's absolute position on screen
+            double absolutePetX = roomPosition.X + petXInRoom;
+            double absolutePetY = roomPosition.Y + petYInRoom;
+
+            // Check if pet is outside the room bounds (with some margin)
+            bool isOutsideRoom = petXInRoom < -20 || petXInRoom > PetInRoomCanvas.Width + 20 ||
+                                 petYInRoom < -20 || petYInRoom > PetInRoomCanvas.Height + 20;
+
+            if (isOutsideRoom)
+            {
+                App.Logger.LogInformation("Pet dragged outside room - exiting at position ({X}, {Y})", absolutePetX, absolutePetY);
+
+                // Transition pet out and place at the dragged position
+                PetInRoomCanvas.Visibility = Visibility.Collapsed;
+                _isPetInRoom = false;
+
+                // Show pet on desktop at the dragged position
+                PetImage.Visibility = Visibility.Visible;
+                _petX = absolutePetX;
+                _petY = absolutePetY;
+
+                // Keep pet within screen bounds
+                _petX = Math.Max(0, Math.Min(_petX, MainCanvas.ActualWidth - PetImage.ActualWidth));
+                _petY = Math.Max(0, Math.Min(_petY, MainCanvas.ActualHeight - PetImage.ActualHeight));
+
+                UpdatePetPosition(_petX, _petY);
+
+                // Set to idle state
+                _animationController.ChangeState(PetState.Idle);
+            }
+            else
+            {
+                // Snap back to bed position if not dragged outside
+                Canvas.SetLeft(PetInRoomImage, 12);
+                Canvas.SetTop(PetInRoomImage, 84);
+
+                // Re-apply scale when snapping back
+                PetInRoomImage.RenderTransform = new ScaleTransform(0.8, 0.8);
+                PetInRoomImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            }
+        }
+
         private void UpdateNeedsDisplay()
         {
+            // Update needs indicators above the room
             HungerBar.Value = _hunger;
             CleanlinessBar.Value = _cleanliness;
             HappinessBar.Value = _happiness;
@@ -558,6 +973,43 @@ namespace AMICUS
             // Update interaction cooldown timer
             _timeSinceLastInteraction += deltaTime;
 
+            // Handle pet in room logic
+            if (_isPetInRoom)
+            {
+                // Update exit timer if room is unlocked
+                if (!_isRoomLocked && !_isDraggingPetFromRoom)
+                {
+                    _exitRoomTimer += deltaTime;
+                    if (_exitRoomTimer >= _exitRoomInterval)
+                    {
+                        // Random chance to exit (40% chance)
+                        if (_random.NextDouble() < 0.4)
+                        {
+                            App.Logger.LogInformation("Pet decided to exit room randomly");
+                            TransitionPetOutOfRoom();
+                        }
+                        else
+                        {
+                            // Reset timer for next check
+                            _exitRoomTimer = 0;
+                            _exitRoomInterval = _random.Next(30, 60);
+                        }
+                    }
+                }
+
+                // Update animation for pet in room
+                _animationController.Update(deltaTime);
+                var roomFrame = _animationController.GetCurrentFrame();
+                if (roomFrame != null)
+                {
+                    PetInRoomImage.Source = roomFrame;
+                }
+
+                // Skip normal pet behavior and needs degradation when in room
+                UpdateNeedsDisplay();
+                return;
+            }
+
             // Mouse proximity detection and chase trigger
             if (_hasMousePosition && !_isDraggingPet && !_isPerformingAction)
             {
@@ -569,7 +1021,7 @@ namespace AMICUS
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
                 // Handle proximity timer and chase triggering
-                if (distanceToMouse < DETECTION_RADIUS && !_isChasing)
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive)
                 {
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
@@ -598,12 +1050,33 @@ namespace AMICUS
                 }
                 else if (!_isChasing)
                 {
-                    // Mouse is outside detection radius - reset proximity timer
+                    // Mouse is outside detection radius or cooldown is active - reset proximity timer
                     if (_proximityTimer > 0)
                     {
-                        App.Logger.LogDebug("Mouse left detection radius, resetting proximity timer");
+                        if (_chaseCooldownActive)
+                        {
+                            App.Logger.LogDebug("Chase cooldown active, ignoring proximity");
+                        }
+                        else
+                        {
+                            App.Logger.LogDebug("Mouse left detection radius, resetting proximity timer");
+                        }
                     }
                     _proximityTimer = 0;
+                }
+            }
+
+            // Handle chase cooldown timer
+            if (_chaseCooldownActive)
+            {
+                _chaseCooldownTimer += deltaTime;
+
+                // Check if cooldown has expired
+                if (_chaseCooldownTimer >= _chaseCooldownDuration)
+                {
+                    _chaseCooldownActive = false;
+                    _chaseCooldownTimer = 0;
+                    App.Logger.LogInformation("Chase cooldown expired. Cat can chase again.");
                 }
             }
 
@@ -669,7 +1142,12 @@ namespace AMICUS
                     _petVelocityX = 0;
                     _petVelocityY = 0;
 
-                    App.Logger.LogInformation("Chase ended after {Duration:F1}s", _chaseDuration);
+                    // Start chase cooldown
+                    _chaseCooldownActive = true;
+                    _chaseCooldownTimer = 0;
+                    _chaseCooldownDuration = CHASE_COOLDOWN_MIN + (_random.NextDouble() * (CHASE_COOLDOWN_MAX - CHASE_COOLDOWN_MIN));
+
+                    App.Logger.LogInformation("Chase ended after {Duration:F1}s. Cooldown started for {Cooldown:F1}s", _chaseDuration, _chaseCooldownDuration);
                 }
                 else if (_hasMousePosition)
                 {
@@ -748,8 +1226,79 @@ namespace AMICUS
                     }
                 }
             }
-            // Don't update wandering behavior if pet is being dragged, performing action, or chasing
-            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing)
+
+            // Handle walk to house to eat behavior
+            if (_isWalkingToHouse)
+            {
+                // Increment walk timer
+                _walkToHouseTimer += deltaTime;
+
+                // Check timeout
+                if (_walkToHouseTimer >= WALK_TO_HOUSE_TIMEOUT)
+                {
+                    // Give up walking to house
+                    _isWalkingToHouse = false;
+                    _shouldEatAfterEntering = false;
+                    _walkToHouseTimer = 0;
+                    _animationController.ChangeState(PetState.Idle);
+                    _petVelocityX = 0;
+                    _petVelocityY = 0;
+                    App.Logger.LogWarning("Walk to house timeout - giving up");
+                }
+                else
+                {
+                    // Calculate target position (center of house area)
+                    double targetX = MainCanvas.ActualWidth - 145;
+                    double targetY = MainCanvas.ActualHeight - 306;
+
+                    // Calculate direction to house
+                    double petCenterX = _petX + (PetImage.ActualWidth / 2);
+                    double petCenterY = _petY + (PetImage.ActualHeight / 2);
+                    double deltaX = targetX - petCenterX;
+                    double deltaY = targetY - petCenterY;
+                    double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                    // Check if we've reached the house area
+                    if (distance < 50) // Close enough to house
+                    {
+                        // Reached the house! Stop walking
+                        _isWalkingToHouse = false;
+                        _walkToHouseTimer = 0;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+
+                        App.Logger.LogInformation("Reached house area! Opening house panel and entering room.");
+
+                        // Show house panel if not already visible
+                        if (HousePanel.Visibility == Visibility.Collapsed)
+                        {
+                            ShowHousePanel();
+                        }
+
+                        // Transition pet into room
+                        TransitionPetIntoRoom();
+                    }
+                    else
+                    {
+                        // Keep walking toward house
+                        _animationController.ChangeState(PetState.Walking);
+
+                        if (distance > 0)
+                        {
+                            _petVelocityX = (deltaX / distance) * WALK_TO_HOUSE_SPEED;
+                            _petVelocityY = (deltaY / distance) * WALK_TO_HOUSE_SPEED;
+
+                            // Update facing direction based on movement
+                            if (_petVelocityX > 0)
+                                _animationController.ChangeDirection(PetDirection.Right);
+                            else if (_petVelocityX < 0)
+                                _animationController.ChangeDirection(PetDirection.Left);
+                        }
+                    }
+                }
+            }
+            // Don't update wandering behavior if pet is being dragged, performing action, chasing, or walking to house
+            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing && !_isWalkingToHouse)
             {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
@@ -883,6 +1432,31 @@ namespace AMICUS
                 _happiness = Math.Max(0, _happiness - 4);
 
                 UpdateNeedsDisplay();
+            }
+
+            // Auto-eat from food bowl if hungry
+            if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
+            {
+                if (_isPetInRoom)
+                {
+                    // Cat is already in room, eat from the bowl
+                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                    _isFoodBowlFull = false;
+
+                    // Re-render decorations to show empty bowl
+                    RenderDecorations();
+
+                    UpdateNeedsDisplay();
+                    App.Logger.LogInformation("Cat ate from food bowl! Hunger restored to {Hunger}", _hunger);
+                }
+                else if (!_isWalkingToHouse && !_isPerformingAction && !_isChasing && !_isAttacking)
+                {
+                    // Cat is not in room and not busy, start walking to house
+                    _isWalkingToHouse = true;
+                    _shouldEatAfterEntering = true;
+                    _walkToHouseTimer = 0;
+                    App.Logger.LogInformation("Cat is hungry and food bowl is full. Walking to house to eat.");
+                }
             }
             }
             catch (Exception ex)

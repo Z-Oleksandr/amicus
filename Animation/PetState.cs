@@ -11,7 +11,8 @@ namespace AMICUS.Animation
         Attacking,      // Attacking the mouse cursor
         Sleeping,       // Sleeping with z's
         Playing,        // Playing animation
-        Eating          // Eating animation
+        Eating,         // Eating animation
+        InRoom          // Chilling in the room
     }
 
     /// <summary>

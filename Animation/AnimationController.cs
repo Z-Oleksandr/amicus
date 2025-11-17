@@ -14,6 +14,7 @@ namespace AMICUS.Animation
         private SpriteManager _spriteManager;
         private PetState _currentState;
         private PetDirection _currentDirection;
+        private Random _random;
 
         private List<CroppedBitmap> _currentFrames = new List<CroppedBitmap>();
         private int _currentFrameIndex;
@@ -26,6 +27,7 @@ namespace AMICUS.Animation
         public AnimationController()
         {
             _spriteManager = new SpriteManager();
+            _random = new Random();
             _currentState = PetState.Idle;
             _currentDirection = PetDirection.Right;
             _currentFrameIndex = 0;
@@ -91,6 +93,7 @@ namespace AMICUS.Animation
                     PetState.Sleeping => _spriteManager.GetSleepingFrames(),
                     PetState.Playing => _spriteManager.GetExcitedFrames(),
                     PetState.Eating => _spriteManager.GetHappyFrames(),
+                    PetState.InRoom => _random.NextDouble() < 0.5 ? _spriteManager.GetChillingFrames() : _spriteManager.GetSleepingFrames(),
                     _ => _spriteManager.GetIdleFrames()
                 };
 
