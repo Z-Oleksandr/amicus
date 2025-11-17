@@ -192,6 +192,58 @@
                            Cursor="Hand"/>
                 </Canvas>
 
+                <!-- Food Bowl Message Bubble (positioned over bowl) -->
+                <Canvas x:Name="FoodBowlMessageCanvas"
+                        Width="232"
+                        Height="232"
+                        Background="Transparent"
+                        Visibility="Collapsed">
+                    <Grid x:Name="FoodBowlMessageBubble"
+                          Width="220"
+                          Height="140"
+                          Canvas.Left="10"
+                          Canvas.Top="25">
+                        <!-- Message bubble background -->
+                        <Image x:Name="MessageBubbleImage"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"
+                               Stretch="Fill"/>
+
+                        <!-- Content -->
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    Margin="10">
+                            <TextBlock Text="Fill up food?"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       Foreground="Black"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,8"
+                                       TextWrapping="Wrap"/>
+
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center">
+                                <Button x:Name="FoodBowlYesButton"
+                                        Content="Yes"
+                                        Width="45"
+                                        Height="25"
+                                        Margin="0,0,5,0"
+                                        Click="FoodBowlYesButton_Click"
+                                        Cursor="Hand"
+                                        FontSize="11"
+                                        FontWeight="Bold"/>
+                                <Button x:Name="FoodBowlNoButton"
+                                        Content="No"
+                                        Width="45"
+                                        Height="25"
+                                        Click="FoodBowlNoButton_Click"
+                                        Cursor="Hand"
+                                        FontSize="11"
+                                        FontWeight="Bold"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Canvas>
+
                 <!-- Close Button (positioned at top-right corner) -->
                 <Button x:Name="CloseHouseButton"
                         Width="36"

@@ -124,6 +124,12 @@ namespace AMICUS
         private double _exitRoomTimer = 0;
         private double _exitRoomInterval = 50.0; // Initial interval value = 50 seconds
 
+        // Food bowl state
+        private bool _isFoodBowlFull = false;
+        private const double FOOD_BOWL_FILL_AMOUNT = 75.0;
+        private const double AUTO_EAT_THRESHOLD = 60.0;
+        private System.Windows.Controls.Image? _foodBowlImage = null;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -232,6 +238,14 @@ namespace AMICUS
                 // Load unlocked icon (default state)
                 UpdateLockIcon();
 
+                // Load message bubble background
+                var messageBubbleImage = new BitmapImage();
+                messageBubbleImage.BeginInit();
+                messageBubbleImage.UriSource = new Uri("Resources/elements/control/message_bubble.png", UriKind.Relative);
+                messageBubbleImage.CacheOption = BitmapCacheOption.OnLoad;
+                messageBubbleImage.EndInit();
+                MessageBubbleImage.Source = messageBubbleImage;
+
                 // Load all decorations
                 _decorationManager.LoadAllDecorations();
 
@@ -273,7 +287,15 @@ namespace AMICUS
 
                 foreach (var placed in placedDecorations)
                 {
-                    var decoration = _decorationManager.GetDecoration(placed.DecorationName);
+                    // Check if this is a food bowl - use appropriate state
+                    string decorationName = placed.DecorationName;
+                    if (decorationName == "foodbowl_empty" || decorationName == "foodbowl_full")
+                    {
+                        // Use the correct bowl based on state
+                        decorationName = _isFoodBowlFull ? "foodbowl_full" : "foodbowl_empty";
+                    }
+
+                    var decoration = _decorationManager.GetDecoration(decorationName);
                     if (decoration == null || placed.VariantIndex >= decoration.Variants.Count)
                     {
                         continue;
@@ -298,6 +320,14 @@ namespace AMICUS
                     // Position the image on the canvas
                     Canvas.SetLeft(image, placed.X);
                     Canvas.SetTop(image, placed.Y);
+
+                    // Make food bowl clickable
+                    if (placed.DecorationName == "foodbowl_empty" || placed.DecorationName == "foodbowl_full")
+                    {
+                        image.MouseLeftButtonDown += FoodBowl_MouseLeftButtonDown;
+                        image.Cursor = System.Windows.Input.Cursors.Hand;
+                        _foodBowlImage = image;
+                    }
 
                     // Add to canvas
                     DecorationsCanvas.Children.Add(image);
@@ -640,6 +670,9 @@ namespace AMICUS
 
         private void HideHousePanel()
         {
+            // Hide message bubble when house closes
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+
             // Animate the panel sliding out
             var slideOut = new ThicknessAnimation
             {
@@ -723,6 +756,41 @@ namespace AMICUS
             {
                 ExitApplication();
             }
+        }
+
+        // Food bowl event handlers
+        private void FoodBowl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Show message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Visible;
+            e.Handled = true;
+            App.Logger.LogInformation("Food bowl clicked - showing message bubble");
+        }
+
+        private void FoodBowlYesButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Hide message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+
+            // Check if bowl is already full
+            if (_isFoodBowlFull)
+            {
+                App.Logger.LogInformation("Food bowl is already full");
+                return;
+            }
+
+            // Fill the bowl
+            _isFoodBowlFull = true;
+            RenderDecorations(); // Re-render to show full bowl
+
+            App.Logger.LogInformation("Food bowl filled");
+        }
+
+        private void FoodBowlNoButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Just hide the message bubble
+            FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+            App.Logger.LogInformation("Food bowl fill cancelled");
         }
 
         private void LockRoomButton_Click(object sender, RoutedEventArgs e)
@@ -1227,6 +1295,20 @@ namespace AMICUS
                 _happiness = Math.Max(0, _happiness - 4);
 
                 UpdateNeedsDisplay();
+            }
+
+            // Auto-eat from food bowl if hungry
+            if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
+            {
+                // Cat eats from the bowl
+                _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                _isFoodBowlFull = false;
+
+                // Re-render decorations to show empty bowl
+                RenderDecorations();
+
+                UpdateNeedsDisplay();
+                App.Logger.LogInformation("Cat ate from food bowl! Hunger restored to {Hunger}", _hunger);
             }
             }
             catch (Exception ex)
