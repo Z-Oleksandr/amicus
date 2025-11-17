@@ -142,6 +142,12 @@
                        RenderOptions.BitmapScalingMode="NearestNeighbor"
                        Stretch="Uniform"/>
 
+                <!-- Decorations Canvas (overlays room) -->
+                <Canvas x:Name="DecorationsCanvas"
+                        Width="232"
+                        Height="232"
+                        Background="Transparent"/>
+
                 <!-- Close Button (positioned at top-right corner) -->
                 <Button x:Name="CloseHouseButton"
                         Width="36"

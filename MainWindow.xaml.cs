@@ -62,6 +62,7 @@ namespace AMICUS
 
         // Room management
         private RoomManager _roomManager;
+        private DecorationManager _decorationManager;
 
         // Game loop timer
         private DispatcherTimer _gameTimer;
@@ -127,6 +128,7 @@ namespace AMICUS
             // Initialize room manager
             var loggerFactory = App.ServiceProvider.GetRequiredService<ILoggerFactory>();
             _roomManager = new RoomManager(loggerFactory.CreateLogger<RoomManager>());
+            _decorationManager = new DecorationManager(loggerFactory.CreateLogger<DecorationManager>());
 
             // Setup game loop timer (60 FPS)
             _gameTimer = new DispatcherTimer();
@@ -219,11 +221,82 @@ namespace AMICUS
                 arrowImage.EndInit();
                 CloseHouseArrow.Source = arrowImage;
 
+                // Load all decorations
+                _decorationManager.LoadAllDecorations();
+
+                // Place decorations - positioning iteratively
+                _decorationManager.PlaceDecoration("bed", 0, 12, 117, 0.5);
+                _decorationManager.PlaceDecoration("foodbowl_empty", 0, 127, 150, 0.69);
+                _decorationManager.PlaceDecoration("climber1", 0, 90, 19, 0.59);
+                _decorationManager.PlaceDecoration("window_right", 0, 160, 47, 0.59);
+                _decorationManager.PlaceDecoration("window_left", 0, 40, 33, 0.59);
+                _decorationManager.PlaceDecoration("table", 0, 175, 115, 0.69);
+                _decorationManager.PlaceDecoration("picture2", 0, 10, 80, 1);
+                _decorationManager.PlaceDecoration("picture1", 0, 198, 75, 0.69);
+                _decorationManager.PlaceDecoration("mouse", 0, 80, 105, 0.49);
+                _decorationManager.PlaceDecoration("plant_small", 0, 185, 110, 0.69);
+                _decorationManager.PlaceDecoration("toy_fish", 0, 120, 110, 0.49);
+
+
+
+                // Render decorations on the canvas
+                RenderDecorations();
+
                 App.Logger.LogInformation("Room loaded successfully");
             }
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Failed to load room");
+            }
+        }
+
+        private void RenderDecorations()
+        {
+            try
+            {
+                // Clear existing decorations from canvas
+                DecorationsCanvas.Children.Clear();
+
+                // Get all placed decorations
+                var placedDecorations = _decorationManager.GetPlacedDecorations();
+
+                foreach (var placed in placedDecorations)
+                {
+                    var decoration = _decorationManager.GetDecoration(placed.DecorationName);
+                    if (decoration == null || placed.VariantIndex >= decoration.Variants.Count)
+                    {
+                        continue;
+                    }
+
+                    // Create an Image element for this decoration
+                    var image = new System.Windows.Controls.Image
+                    {
+                        Source = decoration.Variants[placed.VariantIndex],
+                        Stretch = Stretch.None
+                    };
+                    RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+
+                    // Apply scale transform if needed
+                    if (placed.Scale != 1.0)
+                    {
+                        var scaleTransform = new ScaleTransform(placed.Scale, placed.Scale);
+                        image.RenderTransform = scaleTransform;
+                        image.RenderTransformOrigin = new System.Windows.Point(0, 0);
+                    }
+
+                    // Position the image on the canvas
+                    Canvas.SetLeft(image, placed.X);
+                    Canvas.SetTop(image, placed.Y);
+
+                    // Add to canvas
+                    DecorationsCanvas.Children.Add(image);
+                }
+
+                App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to render decorations");
             }
         }
 
