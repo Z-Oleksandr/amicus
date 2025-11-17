@@ -76,7 +76,7 @@ namespace AMICUS
         // Mouse tracking
         private System.Windows.Point _mousePosition;
         private bool _hasMousePosition = false;
-        private const double DETECTION_RADIUS = 200.0; // Distance to log mouse position
+        private const double DETECTION_RADIUS = 300.0; // Distance within which mouse position triggers
 
         // Mouse chasing behavior
         private double _proximityTimer = 0; // Tracks how long mouse has been within detection radius
@@ -86,7 +86,7 @@ namespace AMICUS
         private bool _isAttacking = false;
         private double _attackTimer = 0;
         private const double PROXIMITY_THRESHOLD = 2.0; // Seconds mouse must be within radius to trigger chase
-        private const double CHASE_SPEED = 125.0; // 2.5x normal speed (50 * 2.5)
+        private const double CHASE_SPEED = 150.0; // 3x normal speed (50 * 3)
         private const double CHASE_MIN_DURATION = 10.0;
         private const double CHASE_MAX_DURATION = 15.0;
         private const double ATTACK_DISTANCE = 69.0; // Distance to trigger attack animation
