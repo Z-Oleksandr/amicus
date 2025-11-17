@@ -9,8 +9,10 @@ using System.Windows.Media.Imaging;
 using System.Drawing;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using WinForms = System.Windows.Forms;
 using AMICUS.Animation;
+using Amicus.UI;
 
 namespace AMICUS
 {
@@ -57,6 +59,9 @@ namespace AMICUS
 
         // Animation system
         private AnimationController _animationController;
+
+        // Room management
+        private RoomManager _roomManager;
 
         // Game loop timer
         private DispatcherTimer _gameTimer;
@@ -119,6 +124,10 @@ namespace AMICUS
             _animationController = new AnimationController();
             _random = new Random();
 
+            // Initialize room manager
+            var loggerFactory = App.ServiceProvider.GetRequiredService<ILoggerFactory>();
+            _roomManager = new RoomManager(loggerFactory.CreateLogger<RoomManager>());
+
             // Setup game loop timer (60 FPS)
             _gameTimer = new DispatcherTimer();
             _gameTimer.Interval = TimeSpan.FromMilliseconds(16.67); // ~60 FPS
@@ -173,8 +182,8 @@ namespace AMICUS
                 // Set initial pet position
                 UpdatePetPosition(_petX, _petY);
 
-                // Update needs display
-                UpdateNeedsDisplay();
+                // Load the default room
+                LoadRoom();
 
                 // Initialize pet to idle state
                 _animationController.ChangeState(PetState.Idle);
@@ -191,6 +200,30 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Error during window load");
+            }
+        }
+
+        private void LoadRoom()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading room...");
+                var roomImage = _roomManager.LoadDefaultRoom();
+                RoomImage.Source = roomImage;
+
+                // Load close button arrow
+                var arrowImage = new BitmapImage();
+                arrowImage.BeginInit();
+                arrowImage.UriSource = new Uri("Resources/elements/navigation/right_arrow.png", UriKind.Relative);
+                arrowImage.CacheOption = BitmapCacheOption.OnLoad;
+                arrowImage.EndInit();
+                CloseHouseArrow.Source = arrowImage;
+
+                App.Logger.LogInformation("Room loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load room");
             }
         }
 
@@ -525,6 +558,7 @@ namespace AMICUS
 
         private void UpdateNeedsDisplay()
         {
+            // Update needs indicators above the room
             HungerBar.Value = _hunger;
             CleanlinessBar.Value = _cleanliness;
             HappinessBar.Value = _happiness;

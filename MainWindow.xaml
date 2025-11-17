@@ -14,106 +14,154 @@
         WindowState="Maximized"
         ResizeMode="NoResize"
         Loaded="Window_Loaded">
+    <Window.Resources>
+        <!-- Rounded Progress Bar Style -->
+        <Style x:Key="RoundedProgressBar" TargetType="ProgressBar">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid>
+                            <!-- Background -->
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="3.75"
+                                    BorderThickness="0"/>
+                            <!-- Foreground (Progress) -->
+                            <Border x:Name="PART_Track"
+                                    CornerRadius="3.75"
+                                    BorderThickness="0">
+                                <Grid>
+                                    <Border x:Name="PART_Indicator"
+                                            Background="{TemplateBinding Foreground}"
+                                            CornerRadius="3.75"
+                                            HorizontalAlignment="Left"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid x:Name="MainCanvas" Background="Transparent">
-        <!-- House UI Panel (Bottom-right corner) -->
-        <Border x:Name="HousePanel"
-                Width="250"
-                Height="492"
-                Background="#F0F0F0"
-                BorderBrush="#333"
-                BorderThickness="2"
-                CornerRadius="10"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Margin="0,0,20,60"
-                Visibility="Collapsed">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+        <!-- House Room Panel (Bottom-right corner) -->
+        <StackPanel x:Name="HousePanel"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,20,60"
+                    Visibility="Collapsed"
+                    Background="Transparent">
 
-                <!-- Header -->
-                <Border Grid.Row="0" Background="#4A90E2" Padding="10">
-                    <Grid>
-                        <TextBlock Text="Amicus's House"
-                                   FontSize="16"
-                                   FontWeight="Bold"
-                                   Foreground="White"
-                                   HorizontalAlignment="Left"/>
-                        <Button x:Name="CloseHouseButton"
-                                Content="✕"
-                                Width="30"
-                                Height="30"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Foreground="White"
-                                FontSize="18"
-                                HorizontalAlignment="Right"
-                                Click="CloseHouseButton_Click"
-                                Cursor="Hand"/>
-                    </Grid>
-                </Border>
+            <!-- Needs Indicators (above room) -->
+            <StackPanel x:Name="NeedsPanel"
+                        Width="232"
+                        Background="Transparent"
+                        Margin="0,0,0,5">
 
-                <!-- Needs Meters -->
-                <StackPanel Grid.Row="1" Margin="15,15,15,10">
-                    <TextBlock Text="Needs" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-
-                    <!-- Hunger -->
-                    <TextBlock Text="Hunger" FontSize="12" Margin="0,5,0,3"/>
-                    <ProgressBar x:Name="HungerBar" Height="20" Minimum="0" Maximum="100" Value="75"/>
-
-                    <!-- Cleanliness -->
-                    <TextBlock Text="Cleanliness" FontSize="12" Margin="0,10,0,3"/>
-                    <ProgressBar x:Name="CleanlinessBar" Height="20" Minimum="0" Maximum="100" Value="85"/>
-
-                    <!-- Happiness -->
-                    <TextBlock Text="Happiness" FontSize="12" Margin="0,10,0,3"/>
-                    <ProgressBar x:Name="HappinessBar" Height="20" Minimum="0" Maximum="100" Value="90"/>
+                <!-- Hunger -->
+                <StackPanel Margin="0,0,0,3" HorizontalAlignment="Left">
+                    <TextBlock x:Name="HungerLabel"
+                               Text="Hunger"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               Margin="0,0,0,1"
+                               HorizontalAlignment="Left">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="0" ShadowDepth="1" Direction="0" Opacity="1"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <ProgressBar x:Name="HungerBar"
+                                 Width="174"
+                                 Height="7.5"
+                                 Value="75"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Background="#40FFFFFF"
+                                 Foreground="#FFB5E3"
+                                 BorderThickness="0"
+                                 Style="{StaticResource RoundedProgressBar}"/>
                 </StackPanel>
 
-                <!-- Action Buttons -->
-                <StackPanel Grid.Row="2" Margin="15,10,15,15" VerticalAlignment="Bottom">
-                    <Button Content="Feed"
-                            Height="35"
-                            Margin="0,5"
-                            Background="#4CAF50"
-                            Foreground="White"
-                            BorderThickness="0"
-                            FontSize="14"
-                            Cursor="Hand"
-                            Click="FeedButton_Click"/>
-                    <Button Content="Clean"
-                            Height="35"
-                            Margin="0,5"
-                            Background="#2196F3"
-                            Foreground="White"
-                            BorderThickness="0"
-                            FontSize="14"
-                            Cursor="Hand"
-                            Click="CleanButton_Click"/>
-                    <Button Content="Play"
-                            Height="35"
-                            Margin="0,5"
-                            Background="#FF9800"
-                            Foreground="White"
-                            BorderThickness="0"
-                            FontSize="14"
-                            Cursor="Hand"
-                            Click="PlayButton_Click"/>
-                    <Button Content="Exit Application"
-                            Height="35"
-                            Margin="0,15,0,5"
-                            Background="#F44336"
-                            Foreground="White"
-                            BorderThickness="0"
-                            FontSize="14"
-                            Cursor="Hand"
-                            Click="ExitButton_Click"/>
+                <!-- Cleanliness -->
+                <StackPanel Margin="0,0,0,3" HorizontalAlignment="Left">
+                    <TextBlock x:Name="CleanlinessLabel"
+                               Text="Cleanliness"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               Margin="0,0,0,1"
+                               HorizontalAlignment="Left">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="0" ShadowDepth="1" Direction="0" Opacity="1"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <ProgressBar x:Name="CleanlinessBar"
+                                 Width="174"
+                                 Height="7.5"
+                                 Value="50"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Background="#40FFFFFF"
+                                 Foreground="#B5E3FF"
+                                 BorderThickness="0"
+                                 Style="{StaticResource RoundedProgressBar}"/>
                 </StackPanel>
+
+                <!-- Happiness -->
+                <StackPanel Margin="0,0,0,3" HorizontalAlignment="Left">
+                    <TextBlock x:Name="HappinessLabel"
+                               Text="Happiness"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               Margin="0,0,0,1"
+                               HorizontalAlignment="Left">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="0" ShadowDepth="1" Direction="0" Opacity="1"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <ProgressBar x:Name="HappinessBar"
+                                 Width="174"
+                                 Height="7.5"
+                                 Value="90"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Background="#40FFFFFF"
+                                 Foreground="#FFE5B5"
+                                 BorderThickness="0"
+                                 Style="{StaticResource RoundedProgressBar}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Room Container with Close Button -->
+            <Grid Width="232" Height="232" Margin="0,-5,0,0">
+                <!-- Room Display -->
+                <Image x:Name="RoomImage"
+                       Width="232"
+                       Height="232"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       Stretch="Uniform"/>
+
+                <!-- Close Button (positioned at top-right corner) -->
+                <Button x:Name="CloseHouseButton"
+                        Width="36"
+                        Height="36"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,-95,-5,0"
+                        Click="CloseHouseButton_Click"
+                        Cursor="Hand">
+                    <Image x:Name="CloseHouseArrow"
+                           Width="32"
+                           Height="32"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Stretch="Uniform"/>
+                </Button>
             </Grid>
-        </Border>
+        </StackPanel>
 
         <!-- Toggle House Button (Bottom-right corner) -->
         <Button x:Name="ToggleHouseButton"

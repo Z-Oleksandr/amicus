@@ -168,6 +168,15 @@ Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends 
 -   animate cat chilling in the room
 -   build different rooms
 
+**Technical Implementation:**
+
+In the path: `Resources\Sprites\RetroCatsPaid\CatItems`:
+
+-   under `Rooms` there are .png files, which contain empty rooms, this is going to be the base for the cat house (background), all other items will be added to this room (on top)
+-   under `Decorations` There are different items, which will have to be placed in the room
+    -   The items are grouped (several of the same items in different color in one png) and they are named in the followin pattern: `{itemname}-axb.png`, where a is the number of columns and b is the number of rows of items in this png. Files starting with `template` should not be used.
+    -   We are going to go voer each item one by one, figuring out it's placement in the room, later the user will be able to customise the item by changing it's color, but the position in the room will stay fixed.
+
 **Phase 5: Reminders & Polish (Week 6-7)**
 
 -   Notification system for reminders
