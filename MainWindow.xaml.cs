@@ -103,6 +103,13 @@ namespace AMICUS
         private const double ATTACK_DURATION = 2.0; // Attack animation duration in seconds
         private const double CHASE_CHANCE = 0.42; // 42% chance to start chasing
 
+        // Chase cooldown (prevents chasing immediately after a chase)
+        private bool _chaseCooldownActive = false;
+        private double _chaseCooldownTimer = 0;
+        private double _chaseCooldownDuration = 0;
+        private const double CHASE_COOLDOWN_MIN = 30.0; // Minimum cooldown in seconds
+        private const double CHASE_COOLDOWN_MAX = 300.0; // Maximum cooldown in seconds (5 minutes)
+
         // Petting interaction
         private double _timeSinceLastInteraction = 0;
         private const double PET_COOLDOWN = 2.0; // Cooldown between petting in seconds
@@ -981,7 +988,7 @@ namespace AMICUS
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
                 // Handle proximity timer and chase triggering
-                if (distanceToMouse < DETECTION_RADIUS && !_isChasing)
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive)
                 {
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
@@ -1010,12 +1017,33 @@ namespace AMICUS
                 }
                 else if (!_isChasing)
                 {
-                    // Mouse is outside detection radius - reset proximity timer
+                    // Mouse is outside detection radius or cooldown is active - reset proximity timer
                     if (_proximityTimer > 0)
                     {
-                        App.Logger.LogDebug("Mouse left detection radius, resetting proximity timer");
+                        if (_chaseCooldownActive)
+                        {
+                            App.Logger.LogDebug("Chase cooldown active, ignoring proximity");
+                        }
+                        else
+                        {
+                            App.Logger.LogDebug("Mouse left detection radius, resetting proximity timer");
+                        }
                     }
                     _proximityTimer = 0;
+                }
+            }
+
+            // Handle chase cooldown timer
+            if (_chaseCooldownActive)
+            {
+                _chaseCooldownTimer += deltaTime;
+
+                // Check if cooldown has expired
+                if (_chaseCooldownTimer >= _chaseCooldownDuration)
+                {
+                    _chaseCooldownActive = false;
+                    _chaseCooldownTimer = 0;
+                    App.Logger.LogInformation("Chase cooldown expired. Cat can chase again.");
                 }
             }
 
@@ -1081,7 +1109,12 @@ namespace AMICUS
                     _petVelocityX = 0;
                     _petVelocityY = 0;
 
-                    App.Logger.LogInformation("Chase ended after {Duration:F1}s", _chaseDuration);
+                    // Start chase cooldown
+                    _chaseCooldownActive = true;
+                    _chaseCooldownTimer = 0;
+                    _chaseCooldownDuration = CHASE_COOLDOWN_MIN + (_random.NextDouble() * (CHASE_COOLDOWN_MAX - CHASE_COOLDOWN_MIN));
+
+                    App.Logger.LogInformation("Chase ended after {Duration:F1}s. Cooldown started for {Cooldown:F1}s", _chaseDuration, _chaseCooldownDuration);
                 }
                 else if (_hasMousePosition)
                 {
