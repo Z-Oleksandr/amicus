@@ -113,5 +113,10 @@ namespace AMICUS.Animation
         {
             return LoadAnimation("Dance");
         }
+
+        public List<CroppedBitmap> GetAttackFrames()
+        {
+            return LoadAnimation("Attack");
+        }
     }
 }

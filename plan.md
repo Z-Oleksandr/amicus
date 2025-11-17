@@ -101,14 +101,74 @@ All core pet behavior features implemented and tested successfully:
 -   ⏳ Add more animation states (Sleeping, Playing, Eating)
 -   ⏳ Tune needs degration
 
-**Phase 3: Interactions (Week 3-4)**
+**Phase 3: Interactions (Week 3-4) - ⚠️ IN PROGRESS**
 
--   Mouse cursor tracking and chasing behavior
--   Click interactions (petting, feeding, playing)
--   Drag-to-house functionality
--   Needs degration and satisfaction mechanics
+**Implemented Features:**
 
-**Phase 4: Reminders & Polish (Week 4-5)**
+-   ✅ Click interactions (petting increases happiness)
+-   ✅ Drag-to-house functionality (opens house panel)
+-   ✅ Action button animations (Feed → Eating, Clean → Playing, Play → Playing)
+-   ✅ Petting cooldown (2 seconds)
+-   ✅ Action animation duration (3 seconds)
+
+**Work Session (2025-11-17) - Mouse Chasing & Attack System Implemented:**
+
+Successfully implemented complete mouse chasing and attack behavior with clean architecture:
+
+**Implemented Features:**
+
+1. ✅ Mouse position tracking using Win32 API (GetCursorPos)
+2. ✅ Proximity detection (200px radius)
+3. ✅ Chase trigger system:
+    - 2-second proximity timer before triggering
+    - 42% chance to start chasing (adds personality!)
+    - Logs when cat ignores the mouse
+4. ✅ Chase behavior:
+    - Duration: Random 10-15 seconds
+    - Speed: Dynamic based on distance to mouse
+        - Base speed (≤700px): 150 px/s
+        - Medium speed (700-1200px): 200 px/s
+        - Far speed (>1200px): 250 px/s
+    - Continues for full duration regardless of mouse distance
+    - Uses Running.png animation
+5. ✅ Attack behavior:
+    - Triggers when distance < 69px during chase
+    - Plays Attack.png animation for 2 seconds
+    - Can attack multiple times during single chase
+    - Resumes chasing after each attack
+6. ✅ New PetState enums: `Chasing` and `Attacking`
+7. ✅ Clean state management and logging
+
+**Technical Implementation:**
+
+-   Mouse tracking: `MainWindow.xaml.cs:272-291` (UpdateMousePosition)
+-   Chase trigger: `MainWindow.xaml.cs:567-603` (proximity timer + random chance)
+-   Chase movement: `MainWindow.xaml.cs:638-720` (chase & attack logic)
+-   State definitions: `Animation/PetState.cs:10-11`
+-   Animation mapping: `Animation/AnimationController.cs:89-90`
+
+**Behavior Flow:**
+
+```
+Mouse within 300px for 2s → 42% chance → Chase starts (10-15s) →
+Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends → Idle
+```
+
+**TODO (Future Sessions):**
+
+1. ⏳ Fine-tune chase/attack parameters if needed
+2. ⏳ Add sound effects for chase and attack
+3. ⏳ Consider adding visual effects (dust clouds, etc.)
+
+**Phase 4: Pet's house (Week 4-5)**
+
+-   When clicked on the cat's house the room of the cat should show up
+-   it should be possible to drag and drop the cat into the room to make the cat stay there
+-   room should be lockable (if locked cat can't get out, if unlock cat can randomly get out)
+-   animate cat chilling in the room
+-   build different rooms
+
+**Phase 5: Reminders & Polish (Week 6-7)**
 
 -   Notification system for reminders
 -   System tray integration
