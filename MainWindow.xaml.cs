@@ -116,6 +116,14 @@ namespace AMICUS
         // System tray icon
         private WinForms.NotifyIcon? _notifyIcon;
 
+        // Pet in room state
+        private bool _isPetInRoom = false;
+        private bool _isRoomLocked = false;
+        private bool _isDraggingPetFromRoom = false;
+        private System.Windows.Point _petInRoomDragOffset;
+        private double _exitRoomTimer = 0;
+        private double _exitRoomInterval = 50.0; // Initial interval value = 50 seconds
+
         public MainWindow()
         {
             InitializeComponent();
@@ -220,6 +228,9 @@ namespace AMICUS
                 arrowImage.CacheOption = BitmapCacheOption.OnLoad;
                 arrowImage.EndInit();
                 CloseHouseArrow.Source = arrowImage;
+
+                // Load unlocked icon (default state)
+                UpdateLockIcon();
 
                 // Load all decorations
                 _decorationManager.LoadAllDecorations();
@@ -483,9 +494,94 @@ namespace AMICUS
                     ShowHousePanel();
                 }
 
-                // Increase happiness for bringing pet home
-                _happiness = Math.Min(100, _happiness + 5);
-                UpdateNeedsDisplay();
+                // If house panel is visible, transition pet into room
+                if (HousePanel.Visibility == Visibility.Visible)
+                {
+                    TransitionPetIntoRoom();
+                }
+                else
+                {
+                    // Increase happiness for bringing pet home
+                    _happiness = Math.Min(100, _happiness + 5);
+                    UpdateNeedsDisplay();
+                }
+            }
+        }
+
+        private void TransitionPetIntoRoom()
+        {
+            App.Logger.LogInformation("Transitioning pet into room");
+
+            // Hide pet from desktop
+            PetImage.Visibility = Visibility.Collapsed;
+
+            // Set pet state to InRoom
+            _isPetInRoom = true;
+            _animationController.ChangeState(PetState.InRoom);
+
+            // Stop any movement
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+            _isChasing = false;
+            _isAttacking = false;
+            _isPerformingAction = false;
+
+            // Show pet in room at bed position (bed is at 12, 117 with scale 0.5)
+            // Pet should be positioned on the bed (28px up from bed decoration)
+            Canvas.SetLeft(PetInRoomImage, 12);
+            Canvas.SetTop(PetInRoomImage, 90);
+
+            // Scale down the pet in the room to 0.8x
+            PetInRoomImage.RenderTransform = new ScaleTransform(0.8, 0.8);
+            PetInRoomImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+
+            PetInRoomCanvas.Visibility = Visibility.Visible;
+
+            // Reset exit timer
+            _exitRoomTimer = 0;
+            _exitRoomInterval = _random.Next(30, 60); // Random 30-60 seconds
+
+            // Increase happiness for being in room
+            _happiness = Math.Min(100, _happiness + 5);
+            UpdateNeedsDisplay();
+        }
+
+        private void TransitionPetOutOfRoom()
+        {
+            App.Logger.LogInformation("Transitioning pet out of room");
+
+            // Hide pet from room
+            PetInRoomCanvas.Visibility = Visibility.Collapsed;
+
+            // Set pet state back to normal
+            _isPetInRoom = false;
+
+            // Show pet on desktop near the house button
+            PetImage.Visibility = Visibility.Visible;
+            _petX = MainCanvas.ActualWidth - 300;
+            _petY = MainCanvas.ActualHeight - 200;
+            UpdatePetPosition(_petX, _petY);
+
+            // Set to idle state
+            _animationController.ChangeState(PetState.Idle);
+        }
+
+        private void UpdateLockIcon()
+        {
+            try
+            {
+                var lockImage = new BitmapImage();
+                lockImage.BeginInit();
+                lockImage.UriSource = new Uri(_isRoomLocked ?
+                    "Resources/elements/control/locked.png" :
+                    "Resources/elements/control/unlocked.png", UriKind.Relative);
+                lockImage.CacheOption = BitmapCacheOption.OnLoad;
+                lockImage.EndInit();
+                LockRoomIcon.Source = lockImage;
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load lock icon");
             }
         }
 
@@ -629,6 +725,110 @@ namespace AMICUS
             }
         }
 
+        private void LockRoomButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isRoomLocked = !_isRoomLocked;
+            UpdateLockIcon();
+            App.Logger.LogInformation("Room {Status}", _isRoomLocked ? "locked" : "unlocked");
+        }
+
+        // Pet in room dragging event handlers
+        private void PetInRoomImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _isDraggingPetFromRoom = true;
+            // Store where in the image we clicked
+            _petInRoomDragOffset = e.GetPosition(PetInRoomImage);
+
+            // Reset scale to normal size when grabbed
+            PetInRoomImage.RenderTransform = Transform.Identity;
+
+            PetInRoomImage.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void PetInRoomImage_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isDraggingPetFromRoom)
+            {
+                _isDraggingPetFromRoom = false;
+                PetInRoomImage.ReleaseMouseCapture();
+
+                // Check if pet was dragged out of the room
+                CheckDragOutOfRoom();
+
+                e.Handled = true;
+            }
+        }
+
+        private void PetInRoomImage_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (_isDraggingPetFromRoom && e.LeftButton == MouseButtonState.Pressed)
+            {
+                // Get mouse position relative to room canvas
+                System.Windows.Point currentPosition = e.GetPosition(PetInRoomCanvas);
+
+                // Calculate new position (mouse position - offset)
+                double newX = currentPosition.X - _petInRoomDragOffset.X;
+                double newY = currentPosition.Y - _petInRoomDragOffset.Y;
+
+                // Update position (can go outside room bounds)
+                Canvas.SetLeft(PetInRoomImage, newX);
+                Canvas.SetTop(PetInRoomImage, newY);
+                e.Handled = true;
+            }
+        }
+
+        private void CheckDragOutOfRoom()
+        {
+            // Get pet position in room canvas
+            double petXInRoom = Canvas.GetLeft(PetInRoomImage);
+            double petYInRoom = Canvas.GetTop(PetInRoomImage);
+
+            // Get room canvas position in main canvas
+            System.Windows.Point roomPosition = PetInRoomCanvas.TransformToAncestor(MainCanvas).Transform(new System.Windows.Point(0, 0));
+
+            // Calculate pet's absolute position on screen
+            double absolutePetX = roomPosition.X + petXInRoom;
+            double absolutePetY = roomPosition.Y + petYInRoom;
+
+            // Check if pet is outside the room bounds (with some margin)
+            bool isOutsideRoom = petXInRoom < -20 || petXInRoom > PetInRoomCanvas.Width + 20 ||
+                                 petYInRoom < -20 || petYInRoom > PetInRoomCanvas.Height + 20;
+
+            if (isOutsideRoom)
+            {
+                App.Logger.LogInformation("Pet dragged outside room - exiting at position ({X}, {Y})", absolutePetX, absolutePetY);
+
+                // Transition pet out and place at the dragged position
+                PetInRoomCanvas.Visibility = Visibility.Collapsed;
+                _isPetInRoom = false;
+
+                // Show pet on desktop at the dragged position
+                PetImage.Visibility = Visibility.Visible;
+                _petX = absolutePetX;
+                _petY = absolutePetY;
+
+                // Keep pet within screen bounds
+                _petX = Math.Max(0, Math.Min(_petX, MainCanvas.ActualWidth - PetImage.ActualWidth));
+                _petY = Math.Max(0, Math.Min(_petY, MainCanvas.ActualHeight - PetImage.ActualHeight));
+
+                UpdatePetPosition(_petX, _petY);
+
+                // Set to idle state
+                _animationController.ChangeState(PetState.Idle);
+            }
+            else
+            {
+                // Snap back to bed position if not dragged outside
+                Canvas.SetLeft(PetInRoomImage, 12);
+                Canvas.SetTop(PetInRoomImage, 84);
+
+                // Re-apply scale when snapping back
+                PetInRoomImage.RenderTransform = new ScaleTransform(0.8, 0.8);
+                PetInRoomImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            }
+        }
+
         private void UpdateNeedsDisplay()
         {
             // Update needs indicators above the room
@@ -664,6 +864,43 @@ namespace AMICUS
 
             // Update interaction cooldown timer
             _timeSinceLastInteraction += deltaTime;
+
+            // Handle pet in room logic
+            if (_isPetInRoom)
+            {
+                // Update exit timer if room is unlocked
+                if (!_isRoomLocked && !_isDraggingPetFromRoom)
+                {
+                    _exitRoomTimer += deltaTime;
+                    if (_exitRoomTimer >= _exitRoomInterval)
+                    {
+                        // Random chance to exit (40% chance)
+                        if (_random.NextDouble() < 0.4)
+                        {
+                            App.Logger.LogInformation("Pet decided to exit room randomly");
+                            TransitionPetOutOfRoom();
+                        }
+                        else
+                        {
+                            // Reset timer for next check
+                            _exitRoomTimer = 0;
+                            _exitRoomInterval = _random.Next(30, 60);
+                        }
+                    }
+                }
+
+                // Update animation for pet in room
+                _animationController.Update(deltaTime);
+                var roomFrame = _animationController.GetCurrentFrame();
+                if (roomFrame != null)
+                {
+                    PetInRoomImage.Source = roomFrame;
+                }
+
+                // Skip normal pet behavior and needs degradation when in room
+                UpdateNeedsDisplay();
+                return;
+            }
 
             // Mouse proximity detection and chase trigger
             if (_hasMousePosition && !_isDraggingPet && !_isPerformingAction)

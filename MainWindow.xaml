@@ -161,7 +161,7 @@
             </StackPanel>
             </Border>
 
-            <!-- Room Container with Close Button -->
+            <!-- Room Container with Close Button and Lock Button -->
             <Grid Width="232" Height="232" Margin="0,-5,0,0">
                 <!-- Room Display -->
                 <Image x:Name="RoomImage"
@@ -175,6 +175,22 @@
                         Width="232"
                         Height="232"
                         Background="Transparent"/>
+
+                <!-- Pet In Room Canvas (overlays decorations) -->
+                <Canvas x:Name="PetInRoomCanvas"
+                        Width="232"
+                        Height="232"
+                        Background="Transparent"
+                        Visibility="Collapsed">
+                    <Image x:Name="PetInRoomImage"
+                           Width="64"
+                           Height="64"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor"
+                           MouseLeftButtonDown="PetInRoomImage_MouseLeftButtonDown"
+                           MouseLeftButtonUp="PetInRoomImage_MouseLeftButtonUp"
+                           MouseMove="PetInRoomImage_MouseMove"
+                           Cursor="Hand"/>
+                </Canvas>
 
                 <!-- Close Button (positioned at top-right corner) -->
                 <Button x:Name="CloseHouseButton"
@@ -192,6 +208,26 @@
                     <Image x:Name="CloseHouseArrow"
                            Width="32"
                            Height="32"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Stretch="Uniform"/>
+                </Button>
+
+                <!-- Lock/Unlock Button (positioned under close button) -->
+                <Button x:Name="LockRoomButton"
+                        Width="36"
+                        Height="36"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,-44,0,0"
+                        Click="LockRoomButton_Click"
+                        Cursor="Hand"
+                        Style="{StaticResource RoundedHoverButton}">
+                    <Image x:Name="LockRoomIcon"
+                           Width="27"
+                           Height="27"
                            RenderOptions.BitmapScalingMode="HighQuality"
                            Stretch="Uniform"/>
                 </Button>

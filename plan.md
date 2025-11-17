@@ -177,11 +177,22 @@ In the path: `Resources\Sprites\RetroCatsPaid\CatItems`:
     -   The items are grouped (several of the same items in different color in one png) and they are named in the followin pattern: `{itemname}-axb.png`, where a is the number of columns and b is the number of rows of items in this png. Files starting with `template` should not be used.
     -   We are going to go voer each item one by one, figuring out it's placement in the room, later the user will be able to customise the item by changing it's color, but the position in the room will stay fixed.
 
-**Phase 5: Reminders & Polish (Week 6-7)**
+**Phase 5: Persistance (Week 6-7)**
 
+-   Create a DB for pet to persist its state between app launches (computer restarts)
+-   Deside which sort of storage DB or json file
+-   Reminder creation:
+    -   Drink water reminders
+    -   Excerise reminders
+    -   Custom reminders
 -   Notification system for reminders
--   System tray integration
+
 -   Settings menu for customization
+    -   On first start up of the app pet customisation
+    -   also settings button somewhere (one of the decoration elements in the room)
+
+**Phase 6: Next steps**
+
 -   Sound effects and purring
 
 ### 4. Data Structure Design

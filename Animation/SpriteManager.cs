@@ -118,5 +118,10 @@ namespace AMICUS.Animation
         {
             return LoadAnimation("Attack");
         }
+
+        public List<CroppedBitmap> GetChillingFrames()
+        {
+            return LoadAnimation("Chilling");
+        }
     }
 }
