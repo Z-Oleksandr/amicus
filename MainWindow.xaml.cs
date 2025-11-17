@@ -75,9 +75,12 @@ namespace AMICUS
         private double _idleTimer = 0;
         private double _idleInterval = 5.0; // Go idle every 5 seconds
 
-        // Needs degradation
-        private double _needsTimer = 0;
-        private const double NEEDS_DECAY_INTERVAL = 30.0; // Decay every 30 seconds
+        // Needs degradation rates (per hour)
+        private const double HUNGER_DECAY_PER_HOUR = 66.67; // 100→0 in 1.5 hours
+        private const double CLEANLINESS_DECAY_OUTSIDE_PER_HOUR = 50.0; // 100→0 in 2 hours when outside
+        private const double CLEANLINESS_DECAY_INSIDE_PER_HOUR = 0.0; // No decay when inside
+        private const double HAPPINESS_DECAY_INSIDE_PER_HOUR = 10.0; // -10 per hour when inside
+        private const double HAPPINESS_INCREASE_OUTSIDE_PER_HOUR = 5.0; // +5 per hour when outside
 
         // Mouse tracking
         private System.Windows.Point _mousePosition;
@@ -137,6 +140,16 @@ namespace AMICUS
         private const double AUTO_EAT_THRESHOLD = 60.0;
         private System.Windows.Controls.Image? _foodBowlImage = null;
 
+        // Left window (exit game trigger)
+        private System.Windows.Controls.Image? _leftWindowImage = null;
+
+        // Brush (interactive item)
+        private System.Windows.Controls.Image? _brushImage = null;
+        private bool _isBrushPickedUp = false;
+        private System.Windows.Point _brushOriginalPosition = new System.Windows.Point(95, 105);
+        private const double BRUSH_ORIGINAL_SCALE = 0.05; // Brush image is 819x643, scale to ~40x32
+        private const double BRUSH_PICKUP_SCALE = 0.08; // Larger when picked up
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -193,6 +206,9 @@ namespace AMICUS
 
         private void ExitApplication()
         {
+            // Save game state before closing
+            SaveGameState();
+
             _notifyIcon?.Dispose();
             System.Windows.Application.Current.Shutdown();
         }
@@ -209,15 +225,39 @@ namespace AMICUS
             {
                 App.Logger.LogInformation("Window loaded, initializing pet...");
 
-                // Set initial pet position
+                // Load saved game state first (before setting defaults)
+                LoadGameState();
+
+                // Set initial pet position (will be overridden if save data exists)
                 UpdatePetPosition(_petX, _petY);
 
                 // Load the default room
                 LoadRoom();
 
-                // Initialize pet to idle state
-                _animationController.ChangeState(PetState.Idle);
-                _animationController.ChangeDirection(PetDirection.Right);
+                // Initialize pet to idle state (or restore from save)
+                if (_isPetInRoom)
+                {
+                    // Pet was in room when saved - restore room state
+                    PetImage.Visibility = Visibility.Collapsed;
+                    _animationController.ChangeState(PetState.InRoom);
+
+                    // Position pet in room on bed
+                    Canvas.SetLeft(PetInRoomImage, 12);
+                    Canvas.SetTop(PetInRoomImage, 90);
+                    PetInRoomImage.RenderTransform = new ScaleTransform(0.8, 0.8);
+                    PetInRoomImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+                    PetInRoomCanvas.Visibility = Visibility.Visible;
+
+                    App.Logger.LogInformation("Pet restored in room from save");
+                }
+                else
+                {
+                    _animationController.ChangeState(PetState.Idle);
+                    _animationController.ChangeDirection(PetDirection.Right);
+                }
+
+                // Update needs display
+                UpdateNeedsDisplay();
 
                 App.Logger.LogInformation("Pet initialized, starting game timer...");
 
@@ -252,13 +292,21 @@ namespace AMICUS
                 // Load unlocked icon (default state)
                 UpdateLockIcon();
 
-                // Load message bubble background
+                // Load message bubble background (food bowl)
                 var messageBubbleImage = new BitmapImage();
                 messageBubbleImage.BeginInit();
                 messageBubbleImage.UriSource = new Uri("Resources/elements/control/message_bubble.png", UriKind.Relative);
                 messageBubbleImage.CacheOption = BitmapCacheOption.OnLoad;
                 messageBubbleImage.EndInit();
                 MessageBubbleImage.Source = messageBubbleImage;
+
+                // Load exit message bubble background (left window)
+                var exitMessageBubbleImage = new BitmapImage();
+                exitMessageBubbleImage.BeginInit();
+                exitMessageBubbleImage.UriSource = new Uri("Resources/elements/control/message_bubble_left.png", UriKind.Relative);
+                exitMessageBubbleImage.CacheOption = BitmapCacheOption.OnLoad;
+                exitMessageBubbleImage.EndInit();
+                ExitMessageBubbleImage.Source = exitMessageBubbleImage;
 
                 // Load all decorations
                 _decorationManager.LoadAllDecorations();
@@ -276,16 +324,65 @@ namespace AMICUS
                 _decorationManager.PlaceDecoration("plant_small", 0, 185, 110, 0.69);
                 _decorationManager.PlaceDecoration("toy_fish", 0, 120, 110, 0.49);
 
-
-
                 // Render decorations on the canvas
                 RenderDecorations();
+
+                // Load and place interactive brush (separate from decorations)
+                LoadBrush();
 
                 App.Logger.LogInformation("Room loaded successfully");
             }
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Failed to load room");
+            }
+        }
+
+        private void LoadBrush()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading interactive brush...");
+
+                // Load brush image
+                var brushBitmap = new BitmapImage();
+                brushBitmap.BeginInit();
+                brushBitmap.UriSource = new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/brush.png", UriKind.Relative);
+                brushBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                brushBitmap.EndInit();
+                brushBitmap.Freeze(); // Freeze for performance and thread safety
+
+                // Create image element
+                _brushImage = new System.Windows.Controls.Image
+                {
+                    Source = brushBitmap,
+                    Stretch = Stretch.None,
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                RenderOptions.SetBitmapScalingMode(_brushImage, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(BRUSH_ORIGINAL_SCALE, BRUSH_ORIGINAL_SCALE);
+                _brushImage.RenderTransform = scaleTransform;
+                _brushImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+
+                // Position on canvas
+                Canvas.SetLeft(_brushImage, _brushOriginalPosition.X);
+                Canvas.SetTop(_brushImage, _brushOriginalPosition.Y);
+
+                // Add event handlers
+                _brushImage.MouseLeftButtonDown += Brush_MouseLeftButtonDown;
+                _brushImage.MouseLeftButtonUp += Brush_MouseLeftButtonUp;
+                _brushImage.MouseMove += Brush_MouseMove;
+
+                // Add to canvas (on top of all decorations)
+                DecorationsCanvas.Children.Add(_brushImage);
+
+                App.Logger.LogInformation("Brush loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load brush");
             }
         }
 
@@ -343,8 +440,22 @@ namespace AMICUS
                         _foodBowlImage = image;
                     }
 
+                    // Make left window clickable (exit game trigger)
+                    if (placed.DecorationName == "window_left")
+                    {
+                        image.MouseLeftButtonDown += LeftWindow_MouseLeftButtonDown;
+                        image.Cursor = System.Windows.Input.Cursors.Hand;
+                        _leftWindowImage = image;
+                    }
+
                     // Add to canvas
                     DecorationsCanvas.Children.Add(image);
+                }
+
+                // Add brush on top (if exists and not picked up)
+                if (_brushImage != null && !_isBrushPickedUp)
+                {
+                    DecorationsCanvas.Children.Add(_brushImage);
                 }
 
                 App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
@@ -710,8 +821,9 @@ namespace AMICUS
 
         private void HideHousePanel()
         {
-            // Hide message bubble when house closes
+            // Hide message bubbles when house closes
             FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
+            ExitGameMessageCanvas.Visibility = Visibility.Collapsed;
 
             // Animate the panel sliding out
             var slideOut = new ThicknessAnimation
@@ -832,6 +944,112 @@ namespace AMICUS
             FoodBowlMessageCanvas.Visibility = Visibility.Collapsed;
             App.Logger.LogInformation("Food bowl fill cancelled");
         }
+
+        private void LeftWindow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Show exit game message bubble
+            ExitGameMessageCanvas.Visibility = Visibility.Visible;
+            e.Handled = true;
+            App.Logger.LogInformation("Left window clicked - showing exit confirmation");
+        }
+
+        private void ExitGameYesButton_Click(object sender, RoutedEventArgs e)
+        {
+            App.Logger.LogInformation("User confirmed exit via left window");
+
+            // Save game state before exiting
+            SaveGameState();
+
+            // Exit the application
+            _notifyIcon?.Dispose();
+            System.Windows.Application.Current.Shutdown();
+        }
+
+        private void ExitGameNoButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Just hide the message bubble
+            ExitGameMessageCanvas.Visibility = Visibility.Collapsed;
+            App.Logger.LogInformation("Exit cancelled");
+        }
+
+        #region Brush Interaction Handlers
+
+        private void Brush_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_brushImage == null) return;
+
+            App.Logger.LogInformation("Brush picked up");
+            _isBrushPickedUp = true;
+            e.Handled = true;
+
+            // Remove from decorations canvas
+            DecorationsCanvas.Children.Remove(_brushImage);
+
+            // Scale up
+            _brushImage.RenderTransform = new ScaleTransform(BRUSH_PICKUP_SCALE, BRUSH_PICKUP_SCALE);
+
+            // Add to main canvas to render on top of everything
+            MainCanvas.Children.Add(_brushImage);
+
+            // Capture mouse for smooth dragging
+            _brushImage.CaptureMouse();
+        }
+
+        private void Brush_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (!_isBrushPickedUp || _brushImage == null) return;
+
+            // Get mouse position relative to main canvas
+            var mousePos = e.GetPosition(MainCanvas);
+
+            // Center brush on cursor (accounting for scale)
+            var brushSource = _brushImage.Source as BitmapImage;
+            if (brushSource != null)
+            {
+                double scaledWidth = brushSource.PixelWidth * BRUSH_PICKUP_SCALE;
+                double scaledHeight = brushSource.PixelHeight * BRUSH_PICKUP_SCALE;
+
+                Canvas.SetLeft(_brushImage, mousePos.X - scaledWidth / 2);
+                Canvas.SetTop(_brushImage, mousePos.Y - scaledHeight / 2);
+            }
+        }
+
+        private void Brush_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isBrushPickedUp || _brushImage == null) return;
+
+            App.Logger.LogInformation("Brush released, returning to original position");
+            _isBrushPickedUp = false;
+
+            // Release mouse capture
+            _brushImage.ReleaseMouseCapture();
+
+            // Remove from main canvas
+            MainCanvas.Children.Remove(_brushImage);
+
+            // Animate back to original position and scale
+            AnimateBrushReturn();
+        }
+
+        private void AnimateBrushReturn()
+        {
+            if (_brushImage == null) return;
+
+            // Reset scale
+            _brushImage.RenderTransform = new ScaleTransform(BRUSH_ORIGINAL_SCALE, BRUSH_ORIGINAL_SCALE);
+
+            // Reset position
+            Canvas.SetLeft(_brushImage, _brushOriginalPosition.X);
+            Canvas.SetTop(_brushImage, _brushOriginalPosition.Y);
+
+            // Add back to decorations canvas
+            DecorationsCanvas.Children.Add(_brushImage);
+
+            App.Logger.LogInformation("Brush returned to position ({X}, {Y})",
+                _brushOriginalPosition.X, _brushOriginalPosition.Y);
+        }
+
+        #endregion
 
         private void LockRoomButton_Click(object sender, RoutedEventArgs e)
         {
@@ -1420,19 +1638,40 @@ namespace AMICUS
             // Update sprite direction (flip horizontally when facing left)
             UpdateSpriteDirection();
 
-            // Update needs degradation
-            _needsTimer += deltaTime;
-            if (_needsTimer >= NEEDS_DECAY_INTERVAL)
+            // Update needs degradation (continuous, based on deltaTime)
+            // Hunger: Always decays at same rate (66.67/hour = 100→0 in 1.5h)
+            double hungerDecay = (HUNGER_DECAY_PER_HOUR / 3600.0) * deltaTime;
+            _hunger = Math.Max(0, _hunger - hungerDecay);
+
+            // Cleanliness: Depends on location
+            double cleanlinessDecay;
+            if (_isPetInRoom)
             {
-                _needsTimer = 0;
-
-                // Decay needs over time
-                _hunger = Math.Max(0, _hunger - 5);
-                _cleanliness = Math.Max(0, _cleanliness - 3);
-                _happiness = Math.Max(0, _happiness - 4);
-
-                UpdateNeedsDisplay();
+                // No decay when inside house
+                cleanlinessDecay = (CLEANLINESS_DECAY_INSIDE_PER_HOUR / 3600.0) * deltaTime;
             }
+            else
+            {
+                // 50/hour when outside (100→0 in 2h)
+                cleanlinessDecay = (CLEANLINESS_DECAY_OUTSIDE_PER_HOUR / 3600.0) * deltaTime;
+            }
+            _cleanliness = Math.Max(0, _cleanliness - cleanlinessDecay);
+
+            // Happiness: Depends on location
+            double happinessChange;
+            if (_isPetInRoom)
+            {
+                // -10/hour when inside (gets bored)
+                happinessChange = -(HAPPINESS_DECAY_INSIDE_PER_HOUR / 3600.0) * deltaTime;
+            }
+            else
+            {
+                // +5/hour when outside (happy exploring)
+                happinessChange = (HAPPINESS_INCREASE_OUTSIDE_PER_HOUR / 3600.0) * deltaTime;
+            }
+            _happiness = Math.Max(0, Math.Min(100, _happiness + happinessChange));
+
+            UpdateNeedsDisplay();
 
             // Auto-eat from food bowl if hungry
             if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
@@ -1465,5 +1704,171 @@ namespace AMICUS
                 App.Logger.LogError(ex, "Error in game loop - timer stopped");
             }
         }
+
+        #region Persistence
+
+        /// <summary>
+        /// Saves the current game state to disk
+        /// </summary>
+        private void SaveGameState()
+        {
+            try
+            {
+                App.Logger.LogInformation("Saving game state...");
+
+                var saveData = new Amicus.Data.SaveData
+                {
+                    PetState = new Amicus.Data.PetStateData
+                    {
+                        PositionX = _petX,
+                        PositionY = _petY,
+                        CurrentState = _animationController.CurrentState.ToString(),
+                        IsInRoom = _isPetInRoom,
+                        Hunger = _hunger,
+                        Cleanliness = _cleanliness,
+                        Happiness = _happiness
+                    },
+                    UserSettings = new Amicus.Data.UserSettingsData
+                    {
+                        HouseLocked = _isRoomLocked,
+                        SoundEnabled = true, // Future feature
+                        PetName = "Cat" // Future feature
+                    },
+                    RoomState = new Amicus.Data.RoomStateData
+                    {
+                        FoodBowlFull = _isFoodBowlFull
+                    },
+                    Session = new Amicus.Data.SessionData
+                    {
+                        LastExitTime = DateTime.UtcNow
+                    }
+                };
+
+                bool success = Amicus.Data.SaveManager.SaveGame(saveData);
+                if (success)
+                {
+                    App.Logger.LogInformation("Game state saved successfully");
+                }
+                else
+                {
+                    App.Logger.LogWarning("Failed to save game state");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error saving game state");
+            }
+        }
+
+        /// <summary>
+        /// Loads the saved game state from disk
+        /// </summary>
+        private void LoadGameState()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading game state...");
+
+                var saveData = Amicus.Data.SaveManager.LoadGame();
+                if (saveData == null)
+                {
+                    App.Logger.LogInformation("No save data found, using default values");
+                    return;
+                }
+
+                // Apply time-away degradation first
+                ApplyTimeAwayDegradation(saveData);
+
+                // Restore pet position
+                _petX = saveData.PetState.PositionX;
+                _petY = saveData.PetState.PositionY;
+
+                // Restore needs
+                _hunger = Math.Max(0, Math.Min(100, saveData.PetState.Hunger));
+                _cleanliness = Math.Max(0, Math.Min(100, saveData.PetState.Cleanliness));
+                _happiness = Math.Max(0, Math.Min(100, saveData.PetState.Happiness));
+
+                // Restore room state
+                _isPetInRoom = saveData.PetState.IsInRoom;
+                _isRoomLocked = saveData.UserSettings.HouseLocked;
+                _isFoodBowlFull = saveData.RoomState.FoodBowlFull;
+
+                App.Logger.LogInformation("Game state loaded successfully");
+                App.Logger.LogInformation("Pet position: ({X}, {Y})", _petX, _petY);
+                App.Logger.LogInformation("Needs - Hunger: {H}, Cleanliness: {C}, Happiness: {Hp}",
+                    _hunger, _cleanliness, _happiness);
+                App.Logger.LogInformation("Pet in room: {InRoom}, Locked: {Locked}, Bowl full: {Bowl}",
+                    _isPetInRoom, _isRoomLocked, _isFoodBowlFull);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error loading game state");
+            }
+        }
+
+        /// <summary>
+        /// Applies needs degradation based on time away from the app
+        /// </summary>
+        private void ApplyTimeAwayDegradation(Amicus.Data.SaveData saveData)
+        {
+            try
+            {
+                DateTime lastExit = saveData.Session.LastExitTime;
+                DateTime now = DateTime.UtcNow;
+                TimeSpan timeAway = now - lastExit;
+
+                double hoursAway = timeAway.TotalHours;
+                App.Logger.LogInformation("Time away: {Hours:F2} hours ({Days:F2} days)",
+                    hoursAway, timeAway.TotalDays);
+
+                if (hoursAway <= 0)
+                {
+                    App.Logger.LogInformation("No time has passed, skipping degradation");
+                    return;
+                }
+
+                // Degradation rates per hour (time-away)
+                const double HUNGER_DECAY_AWAY_PER_HOUR = 66.67; // Same as active gameplay
+                const double CLEANLINESS_DECAY_IN_HOUSE_PER_HOUR = 0.333; // 1 point per 3 hours
+                const double CLEANLINESS_DECAY_OUTSIDE_HOUSE_PER_HOUR = 50.0; // Same as active
+                const double HAPPINESS_DECAY_AWAY_PER_HOUR = 5.0; // Fixed rate when away
+
+                // Calculate hunger degradation (always same rate)
+                double hungerLoss = hoursAway * HUNGER_DECAY_AWAY_PER_HOUR;
+
+                // Calculate cleanliness degradation (depends on location)
+                double cleanlinessLoss;
+                if (saveData.PetState.IsInRoom)
+                {
+                    // In house: 1 point per 3 hours
+                    cleanlinessLoss = hoursAway * CLEANLINESS_DECAY_IN_HOUSE_PER_HOUR;
+                }
+                else
+                {
+                    // Outside: 50/hour
+                    cleanlinessLoss = hoursAway * CLEANLINESS_DECAY_OUTSIDE_HOUSE_PER_HOUR;
+                }
+
+                // Calculate happiness degradation (always -5/hour when away)
+                double happinessLoss = hoursAway * HAPPINESS_DECAY_AWAY_PER_HOUR;
+
+                // Apply degradation (with minimum of 0)
+                saveData.PetState.Hunger = Math.Max(0, saveData.PetState.Hunger - hungerLoss);
+                saveData.PetState.Cleanliness = Math.Max(0, saveData.PetState.Cleanliness - cleanlinessLoss);
+                saveData.PetState.Happiness = Math.Max(0, saveData.PetState.Happiness - happinessLoss);
+
+                App.Logger.LogInformation("Applied degradation - Hunger: -{HL:F1}, Cleanliness: -{CL:F1}, Happiness: -{HpL:F1}",
+                    hungerLoss, cleanlinessLoss, happinessLoss);
+                App.Logger.LogInformation("Pet was {Location}", saveData.PetState.IsInRoom ? "in room" : "outside");
+                App.Logger.LogInformation("Needs after degradation - H:{H:F1}, C:{C:F1}, Hp:{Hp:F1}",
+                    saveData.PetState.Hunger, saveData.PetState.Cleanliness, saveData.PetState.Happiness);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error applying time-away degradation");
+            }
+        }
+
+        #endregion
     }
 }

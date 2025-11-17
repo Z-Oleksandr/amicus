@@ -276,19 +276,103 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Could add eating animation when bowl is consumed
 -   Consider adding sound effects for food bowl interaction
 
-**Phase 5: Persistance (Week 6-7)**
+**Phase 5: Persistence (Week 6-7) - In progress**
 
--   Create a DB for pet to persist its state between app launches (computer restarts)
--   Deside which sort of storage DB or json file
+**Work Session (2025-11-17) - Persistence System Implemented:**
+
+✅ **Data Models Created** (`Data/SaveData.cs`):
+
+-   `SaveData` - Root container for all persisted data
+-   `PetStateData` - Pet position, current state, needs (hunger, cleanliness, happiness)
+-   `UserSettingsData` - House lock state, pet name, sound settings
+-   `RoomStateData` - Food bowl state
+-   `SessionData` - Last exit timestamp for time-away degradation
+
+✅ **SaveManager Implemented** (`Data/SaveManager.cs`):
+
+-   Uses JSON file storage at `%AppData%\Amicus\save.json`
+-   `SaveGame()` - Auto-saves on app exit
+-   `LoadGame()` - Auto-loads on app startup
+-   Uses `System.Text.Json` with pretty-printing
+-   Handles missing/corrupt files gracefully
+
+✅ **Exit Game via Left Window**:
+
+-   Left window decoration in house is clickable
+-   Shows message bubble with `message_bubble_left.png`
+-   Prompts "Do you want to exit?" with Yes/No buttons
+-   Yes → saves game state and exits gracefully
+-   Implementation: `MainWindow.xaml.cs:920-945`, `MainWindow.xaml:266-316`
+
+✅ **Updated Needs Degradation System**:
+
+**Active Gameplay Rates (while app running):**
+
+-   Hunger: 66.67/hour (100→0 in 1.5 hours) - same everywhere
+-   Cleanliness: 50/hour outside (100→0 in 2 hours), 0/hour inside house
+-   Happiness: -10/hour inside house (gets bored), +5/hour outside (happy exploring)
+
+**Time-Away Rates (while app is closed):**
+
+-   Hunger: 66.67/hour (matches active)
+-   Cleanliness: 0.333/hour in house (1 point per 3 hours), 50/hour outside
+-   Happiness: -5/hour (fixed, regardless of location)
+
+**Technical Implementation:**
+
+-   Continuous degradation based on deltaTime (not interval-based)
+-   Location-aware logic checks `_isPetInRoom` state
+-   Applied in `GameTimer_Tick` (lines 1500-1533) and `ApplyTimeAwayDegradation` (lines 1689-1721)
+
+✅ **Bug Fixes**:
+
+-   Fixed PetInRoomCanvas blocking clicks to decorations (removed Background property)
+-   All house decorations remain interactive when pet is in room
+
+⏳ **Interactive Brush - IN PROGRESS (BLOCKED)**:
+
+**Goal:** Add draggable brush decoration next to mouse toy
+
+**Completed:**
+
+-   Created brush state fields and constants
+-   Implemented `LoadBrush()` method to load `brush.png` (819×643px)
+-   Set scale to 0.05 (→ ~41×32px) to match other decorations
+-   Positioned at (95, 105) next to mouse toy
+-   Added event handlers for pickup/drag/drop
+-   Implemented pickup logic (scales to 0.08, moves to MainCanvas)
+-   Implemented drop/return animation (returns to position)
+
+**Current Issue:**
+
+-   Brush is NOT visible in the house despite all implementations
+-   Tried fixes:
+    1. ✗ Z-order (adding brush after decorations)
+    2. ✗ Adding `bitmap.Freeze()` call
+    3. ✗ Adjusted scale from 0.35 → 0.05 (image is 819×643, very large)
+    4. ✗ Verified brush is added in `LoadBrush()` and `RenderDecorations()`
+-   Files: `MainWindow.xaml.cs:341-385` (LoadBrush), `974-1051` (handlers)
+-   **NEEDS INVESTIGATION:** Why brush image doesn't render despite being loaded and added to canvas
+
+**Next Steps:**
+
+-   Debug why brush isn't rendering (check actual canvas children, verify image source loaded)
+-   Consider using DecorationManager approach instead of manual loading
+-   Once visible, test pickup/drag/return functionality
+
+**TODO - Reminder System:**
+
 -   Reminder creation:
     -   Drink water reminders
-    -   Excerise reminders
+    -   Exercise reminders
     -   Custom reminders
 -   Notification system for reminders
 
+**TODO - Settings Menu:**
+
 -   Settings menu for customization
     -   On first start up of the app pet customisation
-    -   also settings button somewhere (one of the decoration elements in the room)
+    -   Settings button somewhere (one of the decoration elements in the room)
 
 **Phase 6: Next steps**
 
