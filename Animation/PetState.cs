@@ -7,11 +7,11 @@ namespace AMICUS.Animation
     {
         Idle,           // Standing/sitting still
         Walking,        // Moving around
+        Chasing,        // Chasing the mouse cursor
+        Attacking,      // Attacking the mouse cursor
         Sleeping,       // Sleeping with z's
         Playing,        // Playing animation
-        Eating,         // Eating animation
-        Chasing,        // Chasing mouse cursor
-        Attacking       // Attacking/pouncing
+        Eating          // Eating animation
     }
 
     /// <summary>

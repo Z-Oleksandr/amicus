@@ -104,115 +104,71 @@ All core pet behavior features implemented and tested successfully:
 **Phase 3: Interactions (Week 3-4) - ⚠️ IN PROGRESS**
 
 **Implemented Features:**
--   ✅ Mouse cursor tracking across entire window
+
 -   ✅ Click interactions (petting increases happiness)
 -   ✅ Drag-to-house functionality (opens house panel)
 -   ✅ Action button animations (Feed → Eating, Clean → Playing, Play → Playing)
--   ✅ Attack animation state added
 -   ✅ Petting cooldown (2 seconds)
 -   ✅ Action animation duration (3 seconds)
 
-**Work Session (2025-11-15) - Chase/Attack Logic Refactor:**
+**Work Session (2025-11-17) - Mouse Chasing & Attack System Implemented:**
 
-**✅ Completed Changes:**
+Successfully implemented complete mouse chasing and attack behavior with clean architecture:
 
-1. **Updated Chase/Attack Constants** (MainWindow.xaml.cs:66-79)
-   - Trigger distance: 100px → **200px radius**
-   - Chase duration: **Fixed 15 seconds** (removed randomization)
-   - Chase speed: 120 px/s (unchanged)
-   - Attack distance: 80px → **20px radius**
-   - Attack duration: 1.5 seconds (unchanged)
-   - New: **Proximity duration = 2 seconds** (must stay within 20px for 2s to attack)
-   - Removed: MIN_CHASE_TIME_BEFORE_ATTACK (old logic)
+**Implemented Features:**
 
-2. **Fixed Mouse Position Initialization** (MainWindow.xaml.cs:68, 282-286)
-   - Added `_hasMousePosition` flag to track valid mouse position
-   - Prevents chase triggering before mouse moves (was defaulting to 0,0)
-   - Chase only checks after mouse has moved at least once
+1. ✅ Mouse position tracking using Win32 API (GetCursorPos)
+2. ✅ Proximity detection (200px radius)
+3. ✅ Chase trigger system:
+    - 2-second proximity timer before triggering
+    - 42% chance to start chasing (adds personality!)
+    - Logs when cat ignores the mouse
+4. ✅ Chase behavior:
+    - Duration: Random 10-15 seconds
+    - Speed: Dynamic based on distance to mouse
+        - Base speed (≤700px): 150 px/s
+        - Medium speed (700-1200px): 200 px/s
+        - Far speed (>1200px): 250 px/s
+    - Continues for full duration regardless of mouse distance
+    - Uses Running.png animation
+5. ✅ Attack behavior:
+    - Triggers when distance < 69px during chase
+    - Plays Attack.png animation for 2 seconds
+    - Can attack multiple times during single chase
+    - Resumes chasing after each attack
+6. ✅ New PetState enums: `Chasing` and `Attacking`
+7. ✅ Clean state management and logging
 
-3. **Implemented Entry Detection** (MainWindow.xaml.cs:70, 607-628)
-   - Added `_wasMouseInRange` flag to detect mouse ENTERING 200px radius
-   - Chase only triggers when mouse transitions from outside → inside radius
-   - Prevents immediate re-trigger after chase ends if mouse still within range
-   - Flag resets after chase ends (attack/timeout/edge collision)
+**Technical Implementation:**
 
-4. **New Proximity-Based Attack Logic** (MainWindow.xaml.cs:654-683)
-   - Cat must stay within 20px continuously for 2 seconds to attack
-   - Proximity timer increments when within range
-   - Proximity timer **resets to 0** when mouse moves outside 20px
-   - After attack finishes → always return to Idle (normal behavior)
+-   Mouse tracking: `MainWindow.xaml.cs:272-291` (UpdateMousePosition)
+-   Chase trigger: `MainWindow.xaml.cs:567-603` (proximity timer + random chance)
+-   Chase movement: `MainWindow.xaml.cs:638-720` (chase & attack logic)
+-   State definitions: `Animation/PetState.cs:10-11`
+-   Animation mapping: `Animation/AnimationController.cs:89-90`
 
-5. **Chase Timeout Behavior** (MainWindow.xaml.cs:720-738)
-   - 15 second timeout → returns to Idle
-   - Resets check timer and range tracking flag
+**Behavior Flow:**
 
-6. **Edge Collision Handling** (MainWindow.xaml.cs:880-960)
-   - All 4 edges properly stop chase
-   - Reset proximity timer, check timer, and range tracking flag
+```
+Mouse within 300px for 2s → 42% chance → Chase starts (10-15s) →
+Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends → Idle
+```
 
-7. **Added Deceleration System** (MainWindow.xaml.cs:694-705)
-   - Cat decelerates when within 50px of mouse
-   - Full speed (120 px/s) at >50px
-   - Min speed (20 px/s) at close range
-   - Intended to prevent oscillation/overshooting
+**TODO (Future Sessions):**
 
-**❌ KNOWN ISSUES (UNRESOLVED):**
+1. ⏳ Fine-tune chase/attack parameters if needed
+2. ⏳ Add sound effects for chase and attack
+3. ⏳ Consider adding visual effects (dust clouds, etc.)
 
-1. **Cat Glitching/Oscillating Near Mouse**
-   - Symptom: Cat moves ~40px toward mouse, then starts rapid back-and-forth movement (5px oscillations)
-   - Cause: Likely overshooting mouse position and reversing direction each frame
-   - Attempted Fix: Added deceleration system (lines 694-705) - **DID NOT RESOLVE**
-   - Status: **STILL BROKEN**
+**Phase 4: Pet's house (Week 4-5)**
 
-2. **Chase Loop After Attack**
-   - Symptom: chase → attack → normal → immediate chase again (infinite loop)
-   - Attempted Fix: Entry detection with `_wasMouseInRange` flag
-   - Status: **NEEDS TESTING** (may still be broken)
+-   When clicked on the cat's house the room of the cat should show up
+-   it should be possible to drag and drop the cat into the room to make the cat stay there
+-   room should be lockable (if locked cat can't get out, if unlock cat can randomly get out)
+-   animate cat chilling in the room
+-   build different rooms
 
-3. **Cat Not Moving During Chase**
-   - Symptom: Cat enters chase state but doesn't actually move
-   - Previous Cause: Velocity set to 0 when within 5px ("Very close to target, stopping")
-   - Attempted Fix: Removed 5px stop logic (line 692)
-   - Status: **NEEDS TESTING**
-
-**Current Implementation Details:**
-
-Constants:
-- CHASE_TRIGGER_DISTANCE: 200px radius (mouse enters this → chase starts)
-- CHASE_DURATION: 15 seconds fixed
-- CHASE_SPEED: 120 px/s
-- ATTACK_DISTANCE: 20px radius (proximity range)
-- PROXIMITY_DURATION: 2 seconds (time within 20px to trigger attack)
-- DECEL_START_DISTANCE: 50px (where deceleration begins)
-- MIN_SPEED: 20 px/s (minimum speed when close)
-- CHASE_CHECK_INTERVAL: 2 seconds (how often to check for chase trigger)
-- DIRECTION_CHANGE_COOLDOWN: 0.2 seconds
-
-Logic Flow (INTENDED):
-1. Initial state: Normal behavior (idle/walking)
-2. Mouse ENTERS 200px radius → Chase starts (15s timer)
-3. Cat chases mouse (follows even if mouse leaves 200px radius)
-4. Cat stays within 20px for 2 consecutive seconds → Attack
-5. Attack animation (1.5s) → Return to Idle
-6. Chase ends if: (a) attack triggered, (b) 15s timeout, (c) edge collision
-7. After chase ends, mouse must EXIT and RE-ENTER 200px to trigger new chase
-
-**Debug Logs Location:** debug.md
-- Shows cat getting stuck at 3.7px distance (line 67-363)
-- Shows "Very close to target, stopping" messages
-- Shows immediate chase restart after attack (line 401)
-
-**TODO (Next Session):**
-1. ⚠️ Fix oscillation/glitching issue (primary blocker)
-   - Investigate velocity calculations vs frame rate
-   - Consider damping factor or dead zone
-   - May need to cap maximum movement per frame
-2. ⚠️ Test entry detection (does it prevent chase loop?)
-3. ⚠️ Test if cat actually moves during chase now
-4. Review attack trigger logic (proximity timer implementation)
-5. Add more detailed velocity/position logging to diagnose oscillation
-
-**Phase 4: Reminders & Polish (Week 4-5)**
+**Phase 5: Reminders & Polish (Week 6-7)**
 
 -   Notification system for reminders
 -   System tray integration
