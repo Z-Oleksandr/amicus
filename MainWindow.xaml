@@ -41,6 +41,30 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Close House Button Style with Rounded Hover -->
+        <Style x:Key="RoundedHoverButton" TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="HoverBorder"
+                                    Background="Transparent"
+                                    CornerRadius="6"
+                                    Padding="2">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverBorder" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Grid x:Name="MainCanvas" Background="Transparent">
         <!-- House Room Panel (Bottom-right corner) -->
@@ -52,10 +76,13 @@
                     Background="Transparent">
 
             <!-- Needs Indicators (above room) -->
-            <StackPanel x:Name="NeedsPanel"
-                        Width="232"
-                        Background="Transparent"
-                        Margin="0,0,0,5">
+            <Border Background="#4DCCCCCC"
+                    CornerRadius="8"
+                    Padding="8,0,0,8"
+                    Margin="0,0,0,5">
+                <StackPanel x:Name="NeedsPanel"
+                            Width="216"
+                            Background="Transparent">
 
                 <!-- Hunger -->
                 <StackPanel Margin="0,0,0,3" HorizontalAlignment="Left">
@@ -132,6 +159,7 @@
                                  Style="{StaticResource RoundedProgressBar}"/>
                 </StackPanel>
             </StackPanel>
+            </Border>
 
             <!-- Room Container with Close Button -->
             <Grid Width="232" Height="232" Margin="0,-5,0,0">
@@ -157,9 +185,10 @@
                         Padding="2"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
-                        Margin="0,-95,-5,0"
+                        Margin="0,-82,0,0"
                         Click="CloseHouseButton_Click"
-                        Cursor="Hand">
+                        Cursor="Hand"
+                        Style="{StaticResource RoundedHoverButton}">
                     <Image x:Name="CloseHouseArrow"
                            Width="32"
                            Height="32"
