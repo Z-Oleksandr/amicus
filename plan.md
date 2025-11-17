@@ -162,12 +162,14 @@ Implementing room view system where the pet can enter/exit its house, with decor
 **Completed Features (Steps 1-4, 6):**
 
 ✅ **Step 1: Basic Room Display**
+
 -   Replaced house panel with Room1.png (512×512) display
 -   Room rendering at bottom-right corner with proper scaling
 -   Toggle button functionality working
 -   Implementation: `UI/RoomManager.cs`, `MainWindow.xaml`
 
 ✅ **Step 2: Needs Indicators**
+
 -   Compact needs display above the room
 -   3 progress bars (Hunger, Cleanliness, Happiness)
 -   5px height, rounded corners, soft colors
@@ -175,36 +177,40 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Position: Centered above room
 
 ✅ **Step 3: Decoration System Foundation**
+
 -   Created `UI/DecorationManager.cs`
 -   Sprite extraction from grid PNGs (columns × rows pattern)
 -   Decoration data model and caching system
 -   Position mapping system
 
 ✅ **Step 4: Decorations Placed**
+
 -   11 decorations positioned and scaled:
-    - bed (12, 117) scale 0.5
-    - foodbowl_empty (127, 150) scale 0.69
-    - climber1, windows, table, pictures, toys, plants
+    -   bed (12, 117) scale 0.5
+    -   foodbowl_empty (127, 150) scale 0.69
+    -   climber1, windows, table, pictures, toys, plants
 -   All use variant index 0 (first color)
 
 ✅ **Step 6: Pet In House Functionality**
+
 -   Added `InRoom` state to `PetState` enum
 -   Pet can be dragged into room (appears on bed at position 12, 90)
 -   Pet scales to 0.8x when in room, returns to 1.0x when grabbed
 -   Drag-to-exit: Pet can be dragged out anywhere on desktop
 -   Lock/unlock button (under hide button):
-    - Always visible when house panel open
-    - Icon: locked.png / unlocked.png (27×27)
-    - State persists between transitions
+    -   Always visible when house panel open
+    -   Icon: locked.png / unlocked.png (27×27)
+    -   State persists between transitions
 -   Random exit behavior:
-    - When unlocked: 40% chance every 30-60 seconds
-    - When locked: Pet cannot exit randomly
+    -   When unlocked: 40% chance every 30-60 seconds
+    -   When locked: Pet cannot exit randomly
 -   Uses Chilling.png or Sleeping.png animation (50% random choice)
 -   Pet position in room: (12, 90) - 28px above bed decoration
 
 **Work Session (2025-11-17) - Food Bowl System Implemented:**
 
 ✅ **Interactive Food Bowl:**
+
 -   Clickable food bowl decoration
 -   Message bubble UI with "Fill up food?" prompt
 -   Bubble positioned over bowl with rounded background
@@ -212,18 +218,21 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Message bubble hides when house panel closes
 
 ✅ **Food Bowl State Management:**
+
 -   Automatic switching between `foodbowl_empty.png` and `foodbowl_full.png`
 -   Fill amount: 75% of hunger bar (max 100)
 -   Auto-eat threshold: When hunger < 60%
 -   Food persists in bowl until cat is hungry enough to eat
 
 ✅ **Auto-Eating Logic:**
+
 -   Cat automatically eats when bowl is full AND hunger < 60%
 -   No eating animation (instant hunger restoration)
 -   Hunger increases by 75 (capped at 100)
 -   Bowl empties after eating
 
 **Technical Implementation:**
+
 -   Food bowl state: `MainWindow.xaml.cs:127-131`
 -   Message bubble UI: `MainWindow.xaml:195-245`
 -   Clickable bowl: `MainWindow.xaml.cs:316-322`
@@ -231,28 +240,37 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Auto-eat: `MainWindow.xaml.cs:1292-1304`
 
 **UI Polish:**
+
 -   Toggle house button now has rounded corners (CornerRadius="12")
 -   Drop shadow effect applied
 -   Smooth animations maintained
 
 **TODO (Next Steps - Step 5 Skipped, Steps 7-9 Remaining):**
 
+## Step 5: Color Variant Selection
+
+**Goal:** Allow users to customize decoration colors
+
 ⏳ **Step 7: Lock/Unlock System** - PARTIALLY COMPLETE
+
 -   ✅ Lock UI control and state
 -   ✅ Lock prevents/allows random exit
 -   ⏳ Manual "Let Pet Out" button (optional enhancement)
 
 ⏳ **Step 8: Random Exit Behavior** - ✅ COMPLETE
+
 -   ✅ Exit timer implemented (30-60 seconds when unlocked)
 -   ✅ Probability-based decision (40% chance)
 -   ✅ Exit animation and repositioning
 
 ⏳ **Step 9: Polish & Testing**
+
 -   Test all interactions thoroughly
 -   Fix any edge cases or bugs
 -   Update documentation
 
 **Known Issues / Future Improvements:**
+
 -   Step 5 (Color Variant Selection) - Skipped for now
 -   Multiple rooms not yet implemented
 -   Could add eating animation when bowl is consumed

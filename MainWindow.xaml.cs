@@ -137,6 +137,13 @@ namespace AMICUS
         private const double AUTO_EAT_THRESHOLD = 60.0;
         private System.Windows.Controls.Image? _foodBowlImage = null;
 
+        // Walk to house to eat state
+        private bool _isWalkingToHouse = false;
+        private bool _shouldEatAfterEntering = false;
+        private double _walkToHouseTimer = 0;
+        private const double WALK_TO_HOUSE_TIMEOUT = 30.0; // Give up after 30 seconds
+        private const double WALK_TO_HOUSE_SPEED = 100.0; // Faster walking when hungry
+
         public MainWindow()
         {
             InitializeComponent();
@@ -581,6 +588,32 @@ namespace AMICUS
             // Increase happiness for being in room
             _happiness = Math.Min(100, _happiness + 5);
             UpdateNeedsDisplay();
+
+            // Check if pet entered room to eat from food bowl
+            if (_shouldEatAfterEntering && _isFoodBowlFull)
+            {
+                // Schedule eating to happen after a short delay (1 second)
+                var eatTimer = new DispatcherTimer();
+                eatTimer.Interval = TimeSpan.FromSeconds(1.0);
+                eatTimer.Tick += (s, e) =>
+                {
+                    eatTimer.Stop();
+
+                    // Cat eats from the bowl
+                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                    _isFoodBowlFull = false;
+
+                    // Re-render decorations to show empty bowl
+                    RenderDecorations();
+
+                    UpdateNeedsDisplay();
+                    App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                };
+                eatTimer.Start();
+
+                // Reset the flag
+                _shouldEatAfterEntering = false;
+            }
         }
 
         private void TransitionPetOutOfRoom()
@@ -1193,8 +1226,79 @@ namespace AMICUS
                     }
                 }
             }
-            // Don't update wandering behavior if pet is being dragged, performing action, or chasing
-            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing)
+
+            // Handle walk to house to eat behavior
+            if (_isWalkingToHouse)
+            {
+                // Increment walk timer
+                _walkToHouseTimer += deltaTime;
+
+                // Check timeout
+                if (_walkToHouseTimer >= WALK_TO_HOUSE_TIMEOUT)
+                {
+                    // Give up walking to house
+                    _isWalkingToHouse = false;
+                    _shouldEatAfterEntering = false;
+                    _walkToHouseTimer = 0;
+                    _animationController.ChangeState(PetState.Idle);
+                    _petVelocityX = 0;
+                    _petVelocityY = 0;
+                    App.Logger.LogWarning("Walk to house timeout - giving up");
+                }
+                else
+                {
+                    // Calculate target position (center of house area)
+                    double targetX = MainCanvas.ActualWidth - 145;
+                    double targetY = MainCanvas.ActualHeight - 306;
+
+                    // Calculate direction to house
+                    double petCenterX = _petX + (PetImage.ActualWidth / 2);
+                    double petCenterY = _petY + (PetImage.ActualHeight / 2);
+                    double deltaX = targetX - petCenterX;
+                    double deltaY = targetY - petCenterY;
+                    double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                    // Check if we've reached the house area
+                    if (distance < 50) // Close enough to house
+                    {
+                        // Reached the house! Stop walking
+                        _isWalkingToHouse = false;
+                        _walkToHouseTimer = 0;
+                        _petVelocityX = 0;
+                        _petVelocityY = 0;
+
+                        App.Logger.LogInformation("Reached house area! Opening house panel and entering room.");
+
+                        // Show house panel if not already visible
+                        if (HousePanel.Visibility == Visibility.Collapsed)
+                        {
+                            ShowHousePanel();
+                        }
+
+                        // Transition pet into room
+                        TransitionPetIntoRoom();
+                    }
+                    else
+                    {
+                        // Keep walking toward house
+                        _animationController.ChangeState(PetState.Walking);
+
+                        if (distance > 0)
+                        {
+                            _petVelocityX = (deltaX / distance) * WALK_TO_HOUSE_SPEED;
+                            _petVelocityY = (deltaY / distance) * WALK_TO_HOUSE_SPEED;
+
+                            // Update facing direction based on movement
+                            if (_petVelocityX > 0)
+                                _animationController.ChangeDirection(PetDirection.Right);
+                            else if (_petVelocityX < 0)
+                                _animationController.ChangeDirection(PetDirection.Left);
+                        }
+                    }
+                }
+            }
+            // Don't update wandering behavior if pet is being dragged, performing action, chasing, or walking to house
+            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing && !_isWalkingToHouse)
             {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
@@ -1333,15 +1437,26 @@ namespace AMICUS
             // Auto-eat from food bowl if hungry
             if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
             {
-                // Cat eats from the bowl
-                _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
-                _isFoodBowlFull = false;
+                if (_isPetInRoom)
+                {
+                    // Cat is already in room, eat from the bowl
+                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                    _isFoodBowlFull = false;
 
-                // Re-render decorations to show empty bowl
-                RenderDecorations();
+                    // Re-render decorations to show empty bowl
+                    RenderDecorations();
 
-                UpdateNeedsDisplay();
-                App.Logger.LogInformation("Cat ate from food bowl! Hunger restored to {Hunger}", _hunger);
+                    UpdateNeedsDisplay();
+                    App.Logger.LogInformation("Cat ate from food bowl! Hunger restored to {Hunger}", _hunger);
+                }
+                else if (!_isWalkingToHouse && !_isPerformingAction && !_isChasing && !_isAttacking)
+                {
+                    // Cat is not in room and not busy, start walking to house
+                    _isWalkingToHouse = true;
+                    _shouldEatAfterEntering = true;
+                    _walkToHouseTimer = 0;
+                    App.Logger.LogInformation("Cat is hungry and food bowl is full. Walking to house to eat.");
+                }
             }
             }
             catch (Exception ex)
