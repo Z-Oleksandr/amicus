@@ -86,7 +86,11 @@ namespace AMICUS
         private bool _isAttacking = false;
         private double _attackTimer = 0;
         private const double PROXIMITY_THRESHOLD = 2.0; // Seconds mouse must be within radius to trigger chase
-        private const double CHASE_SPEED = 150.0; // 3x normal speed (50 * 3)
+        private const double CHASE_SPEED_BASE = 150.0; // Base chase speed
+        private const double CHASE_SPEED_MEDIUM = 200.0; // Medium distance chase speed
+        private const double CHASE_SPEED_FAR = 250.0; // Far distance chase speed
+        private const double CHASE_DISTANCE_THRESHOLD_MEDIUM = 700.0; // Distance threshold for medium speed
+        private const double CHASE_DISTANCE_THRESHOLD_FAR = 1200.0; // Distance threshold for far speed
         private const double CHASE_MIN_DURATION = 10.0;
         private const double CHASE_MAX_DURATION = 15.0;
         private const double ATTACK_DISTANCE = 69.0; // Distance to trigger attack animation
@@ -716,8 +720,23 @@ namespace AMICUS
                             // Normal chase movement
                             if (distance > 0)
                             {
-                                _petVelocityX = (deltaX / distance) * CHASE_SPEED;
-                                _petVelocityY = (deltaY / distance) * CHASE_SPEED;
+                                // Calculate chase speed based on distance to mouse
+                                double chaseSpeed;
+                                if (distance > CHASE_DISTANCE_THRESHOLD_FAR)
+                                {
+                                    chaseSpeed = CHASE_SPEED_FAR; // 250 px/s for distances > 1200
+                                }
+                                else if (distance > CHASE_DISTANCE_THRESHOLD_MEDIUM)
+                                {
+                                    chaseSpeed = CHASE_SPEED_MEDIUM; // 200 px/s for distances 700-1200
+                                }
+                                else
+                                {
+                                    chaseSpeed = CHASE_SPEED_BASE; // 150 px/s for distances <= 700
+                                }
+
+                                _petVelocityX = (deltaX / distance) * chaseSpeed;
+                                _petVelocityY = (deltaY / distance) * chaseSpeed;
 
                                 // Update facing direction based on movement
                                 if (_petVelocityX > 0)

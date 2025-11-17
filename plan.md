@@ -125,7 +125,10 @@ Successfully implemented complete mouse chasing and attack behavior with clean a
     - Logs when cat ignores the mouse
 4. ✅ Chase behavior:
     - Duration: Random 10-15 seconds
-    - Speed: 3x normal speed (150 px/s)
+    - Speed: Dynamic based on distance to mouse
+        - Base speed (≤700px): 150 px/s
+        - Medium speed (700-1200px): 200 px/s
+        - Far speed (>1200px): 250 px/s
     - Continues for full duration regardless of mouse distance
     - Uses Running.png animation
 5. ✅ Attack behavior:
@@ -151,17 +154,21 @@ Mouse within 300px for 2s → 42% chance → Chase starts (10-15s) →
 Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends → Idle
 ```
 
-**Known Issues/Future Enhancements:**
-
--   None currently - behavior working as designed
-
 **TODO (Future Sessions):**
 
 1. ⏳ Fine-tune chase/attack parameters if needed
 2. ⏳ Add sound effects for chase and attack
 3. ⏳ Consider adding visual effects (dust clouds, etc.)
 
-**Phase 4: Reminders & Polish (Week 4-5)**
+**Phase 4: Pet's house (Week 4-5)**
+
+-   When clicked on the cat's house the room of the cat should show up
+-   it should be possible to drag and drop the cat into the room to make the cat stay there
+-   room should be lockable (if locked cat can't get out, if unlock cat can randomly get out)
+-   animate cat chilling in the room
+-   build different rooms
+
+**Phase 5: Reminders & Polish (Week 6-7)**
 
 -   Notification system for reminders
 -   System tray integration
