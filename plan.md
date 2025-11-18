@@ -276,7 +276,7 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Could add eating animation when bowl is consumed
 -   Consider adding sound effects for food bowl interaction
 
-**Phase 5: Persistence (Week 6-7) - In progress**
+**Phase 5: Persistence & Interactions (Week 6-7) - ✅ COMPLETE**
 
 **Work Session (2025-11-17) - Persistence System Implemented:**
 
@@ -329,36 +329,47 @@ Implementing room view system where the pet can enter/exit its house, with decor
 -   Fixed PetInRoomCanvas blocking clicks to decorations (removed Background property)
 -   All house decorations remain interactive when pet is in room
 
-⏳ **Interactive Brush - IN PROGRESS (BLOCKED)**:
+**Work Session (2025-11-18) - Interactive Brush & Grooming System Implemented:**
 
-**Goal:** Add draggable brush decoration next to mouse toy
+✅ **Interactive Brush - COMPLETE**:
 
-**Completed:**
+**Goal:** Add draggable brush with grooming interaction
 
--   Created brush state fields and constants
--   Implemented `LoadBrush()` method to load `brush.png` (819×643px)
--   Set scale to 0.05 (→ ~41×32px) to match other decorations
--   Positioned at (95, 105) next to mouse toy
--   Added event handlers for pickup/drag/drop
--   Implemented pickup logic (scales to 0.08, moves to MainCanvas)
--   Implemented drop/return animation (returns to position)
+**Implemented Features:**
 
-**Current Issue:**
+**Brush Item & Interaction:**
+-   Brush decoration visible in house at position (85, 150)
+-   Brush image: `brush.png` (819×643px) scaled to 0.035 (→ ~29×22px)
+-   Pickup: Scales up to 0.05, moves to PetCanvas for top-level rendering
+-   Drag: Follows cursor with 10px right, 15px up offset
+-   Drop: Returns to original position in DecorationsCanvas with elastic animation
+-   Files: `MainWindow.xaml.cs:341-385` (LoadBrush), `1020-1089` (handlers)
 
--   Brush is NOT visible in the house despite all implementations
--   Tried fixes:
-    1. ✗ Z-order (adding brush after decorations)
-    2. ✗ Adding `bitmap.Freeze()` call
-    3. ✗ Adjusted scale from 0.35 → 0.05 (image is 819×643, very large)
-    4. ✗ Verified brush is added in `LoadBrush()` and `RenderDecorations()`
--   Files: `MainWindow.xaml.cs:341-385` (LoadBrush), `974-1051` (handlers)
--   **NEEDS INVESTIGATION:** Why brush image doesn't render despite being loaded and added to canvas
+**Brushing Mechanic:**
+-   Continuous stroking interaction system
+-   Detection: Brush within 80px of pet center triggers Happy state
+-   Animation: New `PetState.Happy` enum using `Happy.png` sprite
+-   Pet behavior: Stops moving, stays still during brushing session
+-   Stroke detection: Each 25px of brush movement = 1 stroke
+-   Rewards per stroke: +2 cleanliness, +1 happiness (capped at 100)
+-   Grace period: 3 seconds after brush leaves before ending session (prevents flicker)
+-   Files: `MainWindow.xaml.cs:153-162` (state vars), `1093-1210` (brushing methods)
 
-**Next Steps:**
+**Animation Updates:**
+-   Added `PetState.Happy` to enum (`Animation/PetState.cs:16`)
+-   Mapped Happy state to `Happy.png` animation (`Animation/AnimationController.cs:97`)
 
--   Debug why brush isn't rendering (check actual canvas children, verify image source loaded)
--   Consider using DecorationManager approach instead of manual loading
--   Once visible, test pickup/drag/return functionality
+**Edge Cases Handled:**
+-   Cannot brush while pet is in house
+-   Cannot brush while pet is being dragged
+-   Brushing ends when brush is released
+-   Brushing resumes if brush returns within 3-second grace period
+
+**Technical Implementation:**
+-   Fixed RenderTransformOrigin issue (was 0.5,0.5 → changed to 0,0 to match decorations)
+-   Fixed coordinate transformation (DecorationsCanvas → PetCanvas using TransformToVisual)
+-   Fixed parent removal race condition with defensive Contains() checks
+-   Integrated detection into GameTimer_Tick (line 1352-1356)
 
 **TODO - Reminder System:**
 
