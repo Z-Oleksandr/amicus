@@ -146,9 +146,9 @@ namespace AMICUS
         // Brush (interactive item)
         private System.Windows.Controls.Image? _brushImage = null;
         private bool _isBrushPickedUp = false;
-        private System.Windows.Point _brushOriginalPosition = new System.Windows.Point(95, 105);
-        private const double BRUSH_ORIGINAL_SCALE = 0.05; // Brush image is 819x643, scale to ~40x32
-        private const double BRUSH_PICKUP_SCALE = 0.08; // Larger when picked up
+        private System.Windows.Point _brushOriginalPosition = new System.Windows.Point(85, 150);
+        private const double BRUSH_ORIGINAL_SCALE = 0.035; // Brush image is 819x643, scale to ~40x32
+        private const double BRUSH_PICKUP_SCALE = 0.05; // Larger when picked up
 
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
@@ -364,7 +364,7 @@ namespace AMICUS
                 // Apply scale transform
                 var scaleTransform = new ScaleTransform(BRUSH_ORIGINAL_SCALE, BRUSH_ORIGINAL_SCALE);
                 _brushImage.RenderTransform = scaleTransform;
-                _brushImage.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+                _brushImage.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
                 // Position on canvas
                 Canvas.SetLeft(_brushImage, _brushOriginalPosition.X);
@@ -982,14 +982,28 @@ namespace AMICUS
             _isBrushPickedUp = true;
             e.Handled = true;
 
+            // Get current position in DecorationsCanvas
+            double brushX = Canvas.GetLeft(_brushImage);
+            double brushY = Canvas.GetTop(_brushImage);
+
+            // Transform position from DecorationsCanvas to PetCanvas
+            // Since they're siblings, we need to use TransformToVisual instead of TransformToAncestor
+            var decorationsPoint = new System.Windows.Point(brushX, brushY);
+            var transform = DecorationsCanvas.TransformToVisual(PetCanvas);
+            var petCanvasPoint = transform.Transform(decorationsPoint);
+
             // Remove from decorations canvas
             DecorationsCanvas.Children.Remove(_brushImage);
 
-            // Scale up
+            // Scale up (note: this changes the visual size but not the position)
             _brushImage.RenderTransform = new ScaleTransform(BRUSH_PICKUP_SCALE, BRUSH_PICKUP_SCALE);
 
-            // Add to main canvas to render on top of everything
-            MainCanvas.Children.Add(_brushImage);
+            // Set position in PetCanvas coordinates
+            Canvas.SetLeft(_brushImage, petCanvasPoint.X);
+            Canvas.SetTop(_brushImage, petCanvasPoint.Y);
+
+            // Add to PetCanvas to render on top of everything
+            PetCanvas.Children.Add(_brushImage);
 
             // Capture mouse for smooth dragging
             _brushImage.CaptureMouse();
@@ -999,18 +1013,19 @@ namespace AMICUS
         {
             if (!_isBrushPickedUp || _brushImage == null) return;
 
-            // Get mouse position relative to main canvas
-            var mousePos = e.GetPosition(MainCanvas);
+            // Get mouse position relative to PetCanvas
+            var mousePos = e.GetPosition(PetCanvas);
 
-            // Center brush on cursor (accounting for scale)
+            // Center brush on cursor (accounting for scale) with slight offset
             var brushSource = _brushImage.Source as BitmapImage;
             if (brushSource != null)
             {
                 double scaledWidth = brushSource.PixelWidth * BRUSH_PICKUP_SCALE;
                 double scaledHeight = brushSource.PixelHeight * BRUSH_PICKUP_SCALE;
 
-                Canvas.SetLeft(_brushImage, mousePos.X - scaledWidth / 2);
-                Canvas.SetTop(_brushImage, mousePos.Y - scaledHeight / 2);
+                // Offset: 5px to the right, 5px higher (subtract for up)
+                Canvas.SetLeft(_brushImage, mousePos.X - scaledWidth / 2 + 10);
+                Canvas.SetTop(_brushImage, mousePos.Y - scaledHeight / 2 - 15);
             }
         }
 
@@ -1019,21 +1034,30 @@ namespace AMICUS
             if (!_isBrushPickedUp || _brushImage == null) return;
 
             App.Logger.LogInformation("Brush released, returning to original position");
-            _isBrushPickedUp = false;
 
             // Release mouse capture
             _brushImage.ReleaseMouseCapture();
 
-            // Remove from main canvas
-            MainCanvas.Children.Remove(_brushImage);
+            // Remove from PetCanvas
+            PetCanvas.Children.Remove(_brushImage);
 
             // Animate back to original position and scale
             AnimateBrushReturn();
+
+            // Only set flag to false AFTER brush is safely back in DecorationsCanvas
+            _isBrushPickedUp = false;
         }
 
         private void AnimateBrushReturn()
         {
             if (_brushImage == null) return;
+
+            // Ensure brush is completely removed from PetCanvas (defensive programming)
+            if (PetCanvas.Children.Contains(_brushImage))
+            {
+                PetCanvas.Children.Remove(_brushImage);
+                App.Logger.LogDebug("Removed brush from PetCanvas in AnimateBrushReturn");
+            }
 
             // Reset scale
             _brushImage.RenderTransform = new ScaleTransform(BRUSH_ORIGINAL_SCALE, BRUSH_ORIGINAL_SCALE);
@@ -1042,11 +1066,17 @@ namespace AMICUS
             Canvas.SetLeft(_brushImage, _brushOriginalPosition.X);
             Canvas.SetTop(_brushImage, _brushOriginalPosition.Y);
 
-            // Add back to decorations canvas
-            DecorationsCanvas.Children.Add(_brushImage);
-
-            App.Logger.LogInformation("Brush returned to position ({X}, {Y})",
-                _brushOriginalPosition.X, _brushOriginalPosition.Y);
+            // Only add back to decorations canvas if it's not already there
+            if (!DecorationsCanvas.Children.Contains(_brushImage))
+            {
+                DecorationsCanvas.Children.Add(_brushImage);
+                App.Logger.LogInformation("Brush returned to position ({X}, {Y})",
+                    _brushOriginalPosition.X, _brushOriginalPosition.Y);
+            }
+            else
+            {
+                App.Logger.LogWarning("Brush was already in DecorationsCanvas");
+            }
         }
 
         #endregion
