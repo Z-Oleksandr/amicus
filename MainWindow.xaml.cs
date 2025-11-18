@@ -150,6 +150,17 @@ namespace AMICUS
         private const double BRUSH_ORIGINAL_SCALE = 0.035; // Brush image is 819x643, scale to ~40x32
         private const double BRUSH_PICKUP_SCALE = 0.05; // Larger when picked up
 
+        // Brushing interaction state
+        private bool _isBrushingPet = false;
+        private double _brushingStrokeCount = 0;
+        private System.Windows.Point _lastBrushPosition = new System.Windows.Point(0, 0);
+        private double _brushAwayTimer = 0; // Time since brush left contact area
+        private const double BRUSH_CONTACT_DISTANCE = 80.0; // Pixels for brush-pet overlap
+        private const double STROKE_DISTANCE_THRESHOLD = 25.0; // Min movement for a stroke (increased for slower rate)
+        private const double CLEANLINESS_PER_STROKE = 2.0; // Reduced from 5.0 for balanced progression
+        private const double HAPPINESS_PER_STROKE = 1.0; // Reduced from 3.0 for balanced progression
+        private const double BRUSH_GRACE_PERIOD = 3.0; // Seconds to wait before ending brushing session
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -1035,6 +1046,12 @@ namespace AMICUS
 
             App.Logger.LogInformation("Brush released, returning to original position");
 
+            // End brushing session if active
+            if (_isBrushingPet)
+            {
+                EndBrushing();
+            }
+
             // Release mouse capture
             _brushImage.ReleaseMouseCapture();
 
@@ -1077,6 +1094,137 @@ namespace AMICUS
             {
                 App.Logger.LogWarning("Brush was already in DecorationsCanvas");
             }
+        }
+
+        #endregion
+
+        #region Brushing Interaction Methods
+
+        private void DetectBrushingInteraction(double deltaTime)
+        {
+            if (_brushImage == null || !_isBrushPickedUp) return;
+
+            // Don't brush if pet is in room or being dragged
+            if (_isPetInRoom || _isDraggingPet || _isDraggingPetFromRoom)
+            {
+                if (_isBrushingPet)
+                {
+                    EndBrushing();
+                }
+                return;
+            }
+
+            // Get brush position in PetCanvas coordinates
+            double brushX = Canvas.GetLeft(_brushImage);
+            double brushY = Canvas.GetTop(_brushImage);
+
+            // Get pet center position
+            double petCenterX = _petX + (PetImage.ActualWidth / 2);
+            double petCenterY = _petY + (PetImage.ActualHeight / 2);
+
+            // Calculate distance between brush and pet center
+            double deltaX = brushX - petCenterX;
+            double deltaY = brushY - petCenterY;
+            double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // Check if brush is in contact with pet
+            if (distance < BRUSH_CONTACT_DISTANCE)
+            {
+                // Brush is in contact - reset away timer
+                _brushAwayTimer = 0;
+
+                if (!_isBrushingPet)
+                {
+                    // Start brushing session
+                    StartBrushing();
+                }
+                else
+                {
+                    // Already brushing - detect strokes
+                    DetectBrushStroke(brushX, brushY);
+                }
+            }
+            else
+            {
+                // Brush moved away from pet
+                if (_isBrushingPet)
+                {
+                    // Increment away timer
+                    _brushAwayTimer += deltaTime;
+
+                    // Only end brushing after grace period (3 seconds)
+                    if (_brushAwayTimer >= BRUSH_GRACE_PERIOD)
+                    {
+                        EndBrushing();
+                    }
+                }
+            }
+        }
+
+        private void StartBrushing()
+        {
+            _isBrushingPet = true;
+            _brushingStrokeCount = 0;
+            _brushAwayTimer = 0;
+            _lastBrushPosition = new System.Windows.Point(Canvas.GetLeft(_brushImage), Canvas.GetTop(_brushImage));
+
+            // Stop pet movement and enter Happy state (uses Happy.png animation)
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+            _animationController.ChangeState(PetState.Happy);
+
+            // Cancel any ongoing actions or chasing
+            _isChasing = false;
+            _isAttacking = false;
+            _isPerformingAction = false;
+
+            App.Logger.LogInformation("Started brushing the pet");
+        }
+
+        private void EndBrushing()
+        {
+            if (!_isBrushingPet) return;
+
+            _isBrushingPet = false;
+            _brushAwayTimer = 0;
+
+            // Return pet to idle state
+            _animationController.ChangeState(PetState.Idle);
+
+            App.Logger.LogInformation("Ended brushing session. Total strokes: {Count}", _brushingStrokeCount);
+            _brushingStrokeCount = 0;
+        }
+
+        private void DetectBrushStroke(double currentBrushX, double currentBrushY)
+        {
+            // Calculate movement since last frame
+            double deltaX = currentBrushX - _lastBrushPosition.X;
+            double deltaY = currentBrushY - _lastBrushPosition.Y;
+            double movementDistance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // If brush moved enough, count it as a stroke
+            if (movementDistance >= STROKE_DISTANCE_THRESHOLD)
+            {
+                ApplyBrushStroke();
+                _lastBrushPosition = new System.Windows.Point(currentBrushX, currentBrushY);
+            }
+        }
+
+        private void ApplyBrushStroke()
+        {
+            _brushingStrokeCount++;
+
+            // Increase cleanliness (capped at 100)
+            _cleanliness = Math.Min(100, _cleanliness + CLEANLINESS_PER_STROKE);
+
+            // Increase happiness (capped at 100)
+            _happiness = Math.Min(100, _happiness + HAPPINESS_PER_STROKE);
+
+            // Update UI
+            UpdateNeedsDisplay();
+
+            App.Logger.LogDebug("Brush stroke #{Count}: Cleanliness = {Clean:F1}, Happiness = {Happy:F1}",
+                _brushingStrokeCount, _cleanliness, _happiness);
         }
 
         #endregion
@@ -1220,6 +1368,12 @@ namespace AMICUS
 
             // Update interaction cooldown timer
             _timeSinceLastInteraction += deltaTime;
+
+            // Detect brushing interaction (if brush is picked up)
+            if (_isBrushPickedUp && _brushImage != null)
+            {
+                DetectBrushingInteraction(deltaTime);
+            }
 
             // Handle pet in room logic
             if (_isPetInRoom)
