@@ -161,6 +161,13 @@ namespace AMICUS
         private const double HAPPINESS_PER_STROKE = 1.0; // Reduced from 3.0 for balanced progression
         private const double BRUSH_GRACE_PERIOD = 3.0; // Seconds to wait before ending brushing session
 
+        // Scoop (interactive item)
+        private System.Windows.Controls.Image? _scoopImage = null;
+        private bool _isScoopPickedUp = false;
+        private System.Windows.Point _scoopOriginalPosition = new System.Windows.Point(180, -5);
+        private const double SCOOP_ORIGINAL_SCALE = 0.05; // Scale to fit room
+        private const double SCOOP_PICKUP_SCALE = 0.08; // Slightly larger when picked up
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -341,6 +348,9 @@ namespace AMICUS
                 // Load and place interactive brush (separate from decorations)
                 LoadBrush();
 
+                // Load and place interactive scoop (separate from decorations)
+                LoadScoop();
+
                 App.Logger.LogInformation("Room loaded successfully");
             }
             catch (Exception ex)
@@ -394,6 +404,54 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Failed to load brush");
+            }
+        }
+
+        private void LoadScoop()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading interactive scoop...");
+
+                // Load scoop image
+                var scoopBitmap = new BitmapImage();
+                scoopBitmap.BeginInit();
+                scoopBitmap.UriSource = new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/scoop.png", UriKind.Relative);
+                scoopBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                scoopBitmap.EndInit();
+                scoopBitmap.Freeze(); // Freeze for performance and thread safety
+
+                // Create image element
+                _scoopImage = new System.Windows.Controls.Image
+                {
+                    Source = scoopBitmap,
+                    Stretch = Stretch.None,
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                RenderOptions.SetBitmapScalingMode(_scoopImage, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(SCOOP_ORIGINAL_SCALE, SCOOP_ORIGINAL_SCALE);
+                _scoopImage.RenderTransform = scaleTransform;
+                _scoopImage.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position on canvas
+                Canvas.SetLeft(_scoopImage, _scoopOriginalPosition.X);
+                Canvas.SetTop(_scoopImage, _scoopOriginalPosition.Y);
+
+                // Add event handlers
+                _scoopImage.MouseLeftButtonDown += Scoop_MouseLeftButtonDown;
+                _scoopImage.MouseLeftButtonUp += Scoop_MouseLeftButtonUp;
+                _scoopImage.MouseMove += Scoop_MouseMove;
+
+                // Add to canvas (on top of all decorations)
+                DecorationsCanvas.Children.Add(_scoopImage);
+
+                App.Logger.LogInformation("Scoop loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load scoop");
             }
         }
 
@@ -467,6 +525,12 @@ namespace AMICUS
                 if (_brushImage != null && !_isBrushPickedUp)
                 {
                     DecorationsCanvas.Children.Add(_brushImage);
+                }
+
+                // Add scoop on top (if exists and not picked up)
+                if (_scoopImage != null && !_isScoopPickedUp)
+                {
+                    DecorationsCanvas.Children.Add(_scoopImage);
                 }
 
                 App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
@@ -1093,6 +1157,115 @@ namespace AMICUS
             else
             {
                 App.Logger.LogWarning("Brush was already in DecorationsCanvas");
+            }
+        }
+
+        #endregion
+
+        #region Scoop Interaction Handlers
+
+        private void Scoop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_scoopImage == null) return;
+
+            App.Logger.LogInformation("Scoop picked up");
+            _isScoopPickedUp = true;
+            e.Handled = true;
+
+            // Get current position in DecorationsCanvas
+            double scoopX = Canvas.GetLeft(_scoopImage);
+            double scoopY = Canvas.GetTop(_scoopImage);
+
+            // Transform position from DecorationsCanvas to PetCanvas
+            // Since they're siblings, we need to use TransformToVisual instead of TransformToAncestor
+            var decorationsPoint = new System.Windows.Point(scoopX, scoopY);
+            var transform = DecorationsCanvas.TransformToVisual(PetCanvas);
+            var petCanvasPoint = transform.Transform(decorationsPoint);
+
+            // Remove from decorations canvas
+            DecorationsCanvas.Children.Remove(_scoopImage);
+
+            // Scale up (note: this changes the visual size but not the position)
+            _scoopImage.RenderTransform = new ScaleTransform(SCOOP_PICKUP_SCALE, SCOOP_PICKUP_SCALE);
+
+            // Set position in PetCanvas coordinates
+            Canvas.SetLeft(_scoopImage, petCanvasPoint.X);
+            Canvas.SetTop(_scoopImage, petCanvasPoint.Y);
+
+            // Add to PetCanvas to render on top of everything
+            PetCanvas.Children.Add(_scoopImage);
+
+            // Capture mouse for smooth dragging
+            _scoopImage.CaptureMouse();
+        }
+
+        private void Scoop_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (!_isScoopPickedUp || _scoopImage == null) return;
+
+            // Get mouse position relative to PetCanvas
+            var mousePos = e.GetPosition(PetCanvas);
+
+            // Center scoop on cursor (accounting for scale) with slight offset
+            var scoopSource = _scoopImage.Source as BitmapImage;
+            if (scoopSource != null)
+            {
+                double scaledWidth = scoopSource.PixelWidth * SCOOP_PICKUP_SCALE;
+                double scaledHeight = scoopSource.PixelHeight * SCOOP_PICKUP_SCALE;
+
+                // Offset: 28px to the right, 9px higher (add for cursor up)
+                Canvas.SetLeft(_scoopImage, mousePos.X - scaledWidth / 2 - 28);
+                Canvas.SetTop(_scoopImage, mousePos.Y - scaledHeight / 2 + 9);
+            }
+        }
+
+        private void Scoop_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isScoopPickedUp || _scoopImage == null) return;
+
+            App.Logger.LogInformation("Scoop released, returning to original position");
+
+            // Release mouse capture
+            _scoopImage.ReleaseMouseCapture();
+
+            // Remove from PetCanvas
+            PetCanvas.Children.Remove(_scoopImage);
+
+            // Animate back to original position and scale
+            AnimateScoopReturn();
+
+            // Only set flag to false AFTER scoop is safely back in DecorationsCanvas
+            _isScoopPickedUp = false;
+        }
+
+        private void AnimateScoopReturn()
+        {
+            if (_scoopImage == null) return;
+
+            // Ensure scoop is completely removed from PetCanvas (defensive programming)
+            if (PetCanvas.Children.Contains(_scoopImage))
+            {
+                PetCanvas.Children.Remove(_scoopImage);
+                App.Logger.LogDebug("Removed scoop from PetCanvas in AnimateScoopReturn");
+            }
+
+            // Reset scale
+            _scoopImage.RenderTransform = new ScaleTransform(SCOOP_ORIGINAL_SCALE, SCOOP_ORIGINAL_SCALE);
+
+            // Reset position
+            Canvas.SetLeft(_scoopImage, _scoopOriginalPosition.X);
+            Canvas.SetTop(_scoopImage, _scoopOriginalPosition.Y);
+
+            // Only add back to decorations canvas if it's not already there
+            if (!DecorationsCanvas.Children.Contains(_scoopImage))
+            {
+                DecorationsCanvas.Children.Add(_scoopImage);
+                App.Logger.LogInformation("Scoop returned to position ({X}, {Y})",
+                    _scoopOriginalPosition.X, _scoopOriginalPosition.Y);
+            }
+            else
+            {
+                App.Logger.LogWarning("Scoop was already in DecorationsCanvas");
             }
         }
 
