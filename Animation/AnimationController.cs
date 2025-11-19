@@ -94,6 +94,7 @@ namespace AMICUS.Animation
                     PetState.Playing => _spriteManager.GetExcitedFrames(),
                     PetState.Eating => _spriteManager.GetHappyFrames(),
                     PetState.InRoom => _random.NextDouble() < 0.5 ? _spriteManager.GetChillingFrames() : _spriteManager.GetSleepingFrames(),
+                    PetState.Happy => _spriteManager.GetHappyFrames(),
                     _ => _spriteManager.GetIdleFrames()
                 };
 

@@ -12,7 +12,8 @@ namespace AMICUS.Animation
         Sleeping,       // Sleeping with z's
         Playing,        // Playing animation
         Eating,         // Eating animation
-        InRoom          // Chilling in the room
+        InRoom,         // Chilling in the room
+        Happy           // Being brushed (grooming) - uses Happy.png
     }
 
     /// <summary>

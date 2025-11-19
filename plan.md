@@ -1,393 +1,206 @@
-# Desktop pet cat app
+# Desktop Pet Cat App - AMICUS
 
-## Technology Stack Recommendation
+## Technology Stack
 
-For a Windows desktop pet app with these features, I'd recommend:
+-   **Framework**: WPF (Windows Presentation Foundation) with C#/.NET 9.0
+-   **Architecture**: Borderless transparent window with selective click-through
+-   **Animation**: Sprite-based system with state machine
 
--   **Framework**: WPF (Windows Presentation Foundation) with C#/.NET (.NET 9.0)
--   **Why WPF**: Native Windows support, excellent transparency/layering capabilities, smooth animations, and the ability to create always-on-top borderless windows
--   **Alternative**: Electron with web technologies if you want cross-platform potential
-
-## Architecture Plan
-
-### 1. Core Components
-
-**Main Window Manager**
-
--   Borderless, transparent window that spans the entire screen
--   Always-on-top functionality with click-through for non-interactive areas
--   Manages both the pet and house UI elements
-
-**Pet Entity System**
-
--   State machine for pet behaviors (idle, walking, playing, sleeping, etc.)
--   Needs system (hunger, cleanliness, happiness)
--   Position and movement controller
--   Animation controller
-
-**House UI Component**
-
--   Dockable panel in bottom-right corner
--   Can minimize/expand
--   Contains needs meters and interaction buttons
-
-### 2. Key Technical Implementation
-
-**Window Setup (WPF)**
-
-```csharp
-// Transparent, always-on-top window
-WindowStyle = WindowStyle.None
-AllowsTransparency = true
-Background = Transparent
-Topmost = true
-ShowInTaskbar = false
-```
-
-**Hit Testing**
-
--   Make most of the window click-through except pet and house
--   Use Win32 API calls for proper click-through behavior
--   Pet remains interactive for dragging
-
-### 3. Feature Implementation Plan
+## Development Progress
 
 **Phase 1: Foundation ✅ COMPLETE**
 
-**Technical Implementation:**
+-   Borderless transparent window with Win32 click-through
+-   Basic pet rendering and house panel UI
 
--   Window: Borderless, maximized, transparent with WS_EX_LAYERED flag
--   Hit-testing: Win32 WndProc hook for selective click-through
--   Canvas: No background to allow click-through while keeping pet interactive
--   Sprite: Single-frame Idle1.png loaded from Resources/Sprites/
--   Animation: Smooth slide-in/slide-out for house panel (300ms with cubic easing)
+**Phase 2: Pet Behavior ✅ COMPLETE**
 
-**Known Limitations:**
+-   Random wandering with smooth sprite animations (64×64 frames)
+-   State machine (Idle, Walking, Running, Happy, Chasing, Attacking, etc.)
+-   Needs degradation system (hunger, cleanliness, happiness)
+-   Edge detection and physics
 
--   Needs don't degrade over time (Phase 2)
--   No mouse chasing behavior (Phase 3)
--   No persistence between sessions (Phase 2)
+**Phase 3: Interactions ✅ COMPLETE**
 
-**Sprite Decision:**
+-   Click petting (increases happiness)
+-   Drag-to-house functionality
+-   Mouse chasing & attack system:
+    -   Win32 cursor tracking
+    -   Proximity detection (200px) with 2s timer
+    -   42% chance to trigger chase
+    -   Dynamic speed based on distance
+    -   Attack animation when close (<69px)
 
--   Using existing PNGs as-is (each PNG contains multiple animation frames)
--   Phase 2 will implement frame extraction for animations
+**Phase 4: Pet's House ✅ COMPLETE**
 
-**Phase 2: Pet Behavior (Week 2-3)**
+**Room System:**
 
-**Sprite Information:**
+-   Room1.png (512×512) display at bottom-right
+-   Needs indicators (hunger, cleanliness, happiness) with progress bars
+-   DecorationManager system for sprite-based decorations
+-   11 decorations placed (bed, food bowl, climber, windows, toys, plants)
 
--   Sprite strips located at: Resources/Sprites/RetroCatsPaid/Cats/Sprites/
--   Each PNG contains horizontal sprite strip with multiple frames
--   Frame size: 64x64 pixels
--   Frame count calculated automatically (width / 64)
--   Available animations: Idle, Running, Sleeping, Excited, Happy, Jump, Dance, etc.
+**Pet In Room:**
 
-**Phase 2 Status: ✅ COMPLETE**
-All core pet behavior features implemented and tested successfully:
+-   Drag pet into/out of room
+-   Pet appears on bed, scales to 0.8x in room
+-   Lock/unlock system prevents/allows random exit
+-   Random exit: 40% chance every 30-60s when unlocked
+-   Uses Chilling or Sleeping animation in room
 
--   Pet wanders randomly in 2D space with smooth animations
--   Proper state management (Idle ↔ Walking transitions)
--   Sprite flipping based on movement direction
--   Edge detection and bouncing with proper physics
--   Needs degradation system working
--   Comprehensive logging for debugging
--   No known bugs
+**Food Bowl System:**
 
-**TODO (Future Enhancements):**
+-   Clickable bowl with message bubble UI
+-   Switches between empty/full states
+-   Auto-eat when hunger < 60%
+-   Fills 75% hunger
 
--   ⏳ Fine-tune animation speeds if needed
--   ⏳ Adjust wandering behavior parameters (speed, intervals, etc.)
--   ⏳ Add more animation states (Sleeping, Playing, Eating)
--   ⏳ Tune needs degration
+**Phase 5: Persistence & Save System ✅ COMPLETE**
 
-**Phase 3: Interactions (Week 3-4) - ✅ COMPLETE**
+**Save/Load System:**
 
-**Implemented Features:**
+-   JSON storage at `%AppData%\Amicus\save.json`
+-   Saves pet state, needs, room state, user settings
+-   Auto-save on exit, auto-load on startup
+-   Time-away degradation calculation
 
--   ✅ Click interactions (petting increases happiness)
--   ✅ Drag-to-house functionality (opens house panel)
--   ✅ Action button animations (Feed → Eating, Clean → Playing, Play → Playing)
--   ✅ Petting cooldown (2 seconds)
--   ✅ Action animation duration (3 seconds)
+**Exit Game:**
 
-**Work Session (2025-11-17) - Mouse Chasing & Attack System Implemented:**
+-   Clickable left window in room with confirmation bubble
+-   Saves state before exiting
 
-Successfully implemented complete mouse chasing and attack behavior with clean architecture:
+**Needs Degradation:**
 
-**Implemented Features:**
+-   Active rates: Hunger 66.67/hr, Cleanliness 50/hr (outside), Happiness varies by location
+-   Time-away rates: Calculated based on last session timestamp
+-   Location-aware degradation (inside vs outside house)
 
-1. ✅ Mouse position tracking using Win32 API (GetCursorPos)
-2. ✅ Proximity detection (200px radius)
-3. ✅ Chase trigger system:
-    - 2-second proximity timer before triggering
-    - 42% chance to start chasing (adds personality!)
-    - Logs when cat ignores the mouse
-4. ✅ Chase behavior:
-    - Duration: Random 10-15 seconds
-    - Speed: Dynamic based on distance to mouse
-        - Base speed (≤700px): 150 px/s
-        - Medium speed (700-1200px): 200 px/s
-        - Far speed (>1200px): 250 px/s
-    - Continues for full duration regardless of mouse distance
-    - Uses Running.png animation
-5. ✅ Attack behavior:
-    - Triggers when distance < 69px during chase
-    - Plays Attack.png animation for 2 seconds
-    - Can attack multiple times during single chase
-    - Resumes chasing after each attack
-6. ✅ New PetState enums: `Chasing` and `Attacking`
-7. ✅ Clean state management and logging
+**Work Session (2025-11-18) - Interactive Brush & Grooming System Implemented:**
 
-**Technical Implementation:**
+✅ **Interactive Brush - COMPLETE**:
 
--   Mouse tracking: `MainWindow.xaml.cs:272-291` (UpdateMousePosition)
--   Chase trigger: `MainWindow.xaml.cs:567-603` (proximity timer + random chance)
--   Chase movement: `MainWindow.xaml.cs:638-720` (chase & attack logic)
--   State definitions: `Animation/PetState.cs:10-11`
--   Animation mapping: `Animation/AnimationController.cs:89-90`
+**Brush Item & Interaction:**
 
-**Behavior Flow:**
+-   Brush decoration visible in house at position (85, 150)
+-   Pickup/drag/drop system with scale animation (0.035 → 0.05)
+-   Canvas switching (DecorationsCanvas ↔ PetCanvas) for proper z-ordering
 
-```
-Mouse within 300px for 2s → 42% chance → Chase starts (10-15s) →
-Distance < 69px → Attack (2s) → Resume chase → Repeat until duration ends → Idle
-```
+**Brushing Mechanic:**
 
-**Phase 4: Pet's House (Week 4-5) - ⚠️ IN PROGRESS**
+-   Continuous stroking interaction system
+-   Detection: Brush within 80px of pet triggers Happy state
+-   Stroke detection: Each 25px of movement = 1 stroke
+-   Rewards: +2 cleanliness, +1 happiness per stroke
+-   Grace period: 3 seconds after brush leaves contact
 
-**Overview:**
-Implementing room view system where the pet can enter/exit its house, with decorations and interactive elements.
+**Work Session (2025-11-19) - Additional Interactive Items & Poop System:**
 
-**Completed Features (Steps 1-4, 6):**
+✅ **Phase 5.5: Interactive Room Items & Poop System - COMPLETE**
 
-✅ **Step 1: Basic Room Display**
+**Scoop (Pickupable Item):**
 
--   Replaced house panel with Room1.png (512×512) display
--   Room rendering at bottom-right corner with proper scaling
--   Toggle button functionality working
--   Implementation: `UI/RoomManager.cs`, `MainWindow.xaml`
+-   Location: `scoop.png` from CatItems/CatToys
+-   Position: (180, -5) - top-right corner of house panel
+-   Scale: 0.05 normal, 0.08 when picked up
+-   Behavior: Draggable like brush, pickup poop interaction
+-   Implementation: Following exact brush pattern
+-   Files: `MainWindow.xaml.cs:165-169` (vars), `452-498` (LoadScoop), handlers
 
-✅ **Step 2: Needs Indicators**
+**Garbage (Animated GIF - Proximity-Triggered):**
 
--   Compact needs display above the room
--   3 progress bars (Hunger, Cleanliness, Happiness)
--   5px height, rounded corners, soft colors
--   Bold white text labels with black stroke
--   Position: Centered above room
+-   Location: `garbage.gif` (120×120px, animated) from CatItems/CatToys
+-   Position: (10, -5) - top-left corner (symmetrical with scoop)
+-   Scale: 0.37 (not pickupable - stays static)
+-   Animation: Plays full GIF loop once when scoop with poop is near (28 FPS)
+-   GIF frame extraction using WPF's built-in `GifBitmapDecoder`
+-   Idle state: Shows first frame only
+-   Trigger: Proximity detection with scoop holding poop (80px threshold)
+-   Implementation: Custom frame-based animation integrated into game loop
+-   Files: `MainWindow.xaml.cs:172-179` (vars), `500-556` (LoadGarbage), `1763-1784` (animation update)
 
-✅ **Step 3: Decoration System Foundation**
+**Poop System:**
 
--   Created `UI/DecorationManager.cs`
--   Sprite extraction from grid PNGs (columns × rows pattern)
--   Decoration data model and caching system
--   Position mapping system
+-   Random spawning: 50% chance every 1 min (debug) / 1 hour (production)
+-   Spawn conditions: Outside house, Idle/Walking states only
+-   Position: Behind cat based on facing direction (64px right/left, 64px down)
+-   Cleanliness impact: -10 per poop spawn
+-   Visual: `poop.png` sprite at 0.06 scale
+-   Files: `MainWindow.xaml.cs:181-212` (vars/class), `591-647` (SpawnPoop), `2222-2246` (spawn logic)
 
-✅ **Step 4: Decorations Placed**
+**Poop Pickup & Disposal:**
 
--   11 decorations positioned and scaled:
-    -   bed (12, 117) scale 0.5
-    -   foodbowl_empty (127, 150) scale 0.69
-    -   climber1, windows, table, pictures, toys, plants
--   All use variant index 0 (first color)
+-   Scoop proximity detection: 60px threshold to pick up poop
+-   Visual feedback: Scoop changes to `poop_on_scoop.png` when holding poop
+-   Garbage disposal: 80px proximity threshold
+-   Disposal triggers garbage animation automatically
+-   Files: `MainWindow.xaml.cs:1615-1667` (DetectScoopPoopProximity), `1669-1718` (DetectScoopGarbageProximity)
 
-✅ **Step 6: Pet In House Functionality**
+**Poop Persistence:**
 
--   Added `InRoom` state to `PetState` enum
--   Pet can be dragged into room (appears on bed at position 12, 90)
--   Pet scales to 0.8x when in room, returns to 1.0x when grabbed
--   Drag-to-exit: Pet can be dragged out anywhere on desktop
--   Lock/unlock button (under hide button):
-    -   Always visible when house panel open
-    -   Icon: locked.png / unlocked.png (27×27)
-    -   State persists between transitions
--   Random exit behavior:
-    -   When unlocked: 40% chance every 30-60 seconds
-    -   When locked: Pet cannot exit randomly
--   Uses Chilling.png or Sleeping.png animation (50% random choice)
--   Pet position in room: (12, 90) - 28px above bed decoration
+-   Save/load: Poop positions saved to `save.json` on exit
+-   Restoration: All poops restored at exact positions on startup
+-   Cleanliness rule: Set to 0 if any poops existed on exit
+-   Time-away poop: 1 random poop spawned if game off >= 3 min (debug) / 3 hours (production)
+-   Time-away cleanliness: Normal -10 decrease (doesn't force to 0)
+-   Random location: Time-away poop spawns at random screen position (not at pet)
+-   Implementation: Deferred loading pattern (restore after images load)
+-   Files:
+    -   `Data/SaveData.cs:51,57-62` (PoopPositionData class, PoopPositions list)
+    -   `MainWindow.xaml.cs:210-212` (restoration state vars)
+    -   `MainWindow.xaml.cs:2463-2468` (save poops)
+    -   `MainWindow.xaml.cs:2641-2672` (load poop data)
+    -   `MainWindow.xaml.cs:2691-2719` (ApplyPoopRestoration)
+    -   `MainWindow.xaml.cs:649-694` (RestorePoop)
+    -   `MainWindow.xaml.cs:696-752` (SpawnRandomPoop)
 
-**Work Session (2025-11-17) - Food Bowl System Implemented:**
+**Debug Tools:**
 
-✅ **Interactive Food Bowl:**
+-   Debug button available: `poop_debug.md` contains re-add instructions
+-   Button spawns poop at current pet position for testing
+-   Can be re-enabled for future debugging (XAML + handler code documented)
 
--   Clickable food bowl decoration
--   Message bubble UI with "Fill up food?" prompt
--   Bubble positioned over bowl with rounded background
--   Yes/No buttons for user interaction
--   Message bubble hides when house panel closes
+**Technical Notes:**
 
-✅ **Food Bowl State Management:**
+-   Both items load automatically in LoadRoom()
+-   Garbage changed from click-to-animate to proximity-based
+-   Poop instances managed in `List<PoopInstance>` with positions and spawn times
+-   Game loop integration: Spawn timer, proximity detection, animation updates
+-   Persistence uses deferred loading: save data → load images → restore poops
 
--   Automatic switching between `foodbowl_empty.png` and `foodbowl_full.png`
--   Fill amount: 75% of hunger bar (max 100)
--   Auto-eat threshold: When hunger < 60%
--   Food persists in bowl until cat is hungry enough to eat
+## Next Steps / TODO
 
-✅ **Auto-Eating Logic:**
+**Future Enhancements**
 
--   Cat automatically eats when bowl is full AND hunger < 60%
--   No eating animation (instant hunger restoration)
--   Hunger increases by 75 (capped at 100)
--   Bowl empties after eating
+**Phase 6: Additional Features**
 
-**Technical Implementation:**
+⏳ **Reminder System:**
 
--   Food bowl state: `MainWindow.xaml.cs:127-131`
--   Message bubble UI: `MainWindow.xaml:195-245`
--   Clickable bowl: `MainWindow.xaml.cs:316-322`
--   Fill logic: `MainWindow.xaml.cs:750-783`
--   Auto-eat: `MainWindow.xaml.cs:1292-1304`
+-   Drink water reminders
+-   Exercise reminders
+-   Custom user reminders
+-   Notification system
 
-**UI Polish:**
+⏳ **Settings Menu:**
 
--   Toggle house button now has rounded corners (CornerRadius="12")
--   Drop shadow effect applied
--   Smooth animations maintained
+-   Pet customization on first startup
+-   Settings button in room
+-   Sound toggle, reminder management
 
-**TODO (Next Steps - Step 5 Skipped, Steps 7-9 Remaining):**
-
-## Step 5: Color Variant Selection
-
-**Goal:** Allow users to customize decoration colors
-
-⏳ **Step 7: Lock/Unlock System** - PARTIALLY COMPLETE
-
--   ✅ Lock UI control and state
--   ✅ Lock prevents/allows random exit
--   ⏳ Manual "Let Pet Out" button (optional enhancement)
-
-⏳ **Step 8: Random Exit Behavior** - ✅ COMPLETE
-
--   ✅ Exit timer implemented (30-60 seconds when unlocked)
--   ✅ Probability-based decision (40% chance)
--   ✅ Exit animation and repositioning
-
-⏳ **Step 9: Polish & Testing**
-
--   Test all interactions thoroughly
--   Fix any edge cases or bugs
--   Update documentation
-
-**Known Issues / Future Improvements:**
-
--   Step 5 (Color Variant Selection) - Skipped for now
--   Multiple rooms not yet implemented
--   Could add eating animation when bowl is consumed
--   Consider adding sound effects for food bowl interaction
-
-**Phase 5: Persistance (Week 6-7)**
-
--   Create a DB for pet to persist its state between app launches (computer restarts)
--   Deside which sort of storage DB or json file
--   Reminder creation:
-    -   Drink water reminders
-    -   Excerise reminders
-    -   Custom reminders
--   Notification system for reminders
-
--   Settings menu for customization
-    -   On first start up of the app pet customisation
-    -   also settings button somewhere (one of the decoration elements in the room)
-
-**Phase 6: Next steps**
+⏳ **Polish:**
 
 -   Sound effects and purring
+-   Additional room types
+-   More interactive items
+-   Scoop litter box cleaning mechanic
+-   Garbage special interaction
 
-### 4. Data Structure Design
-
-```csharp
-class Pet {
-    // Position & Movement
-    Point Position
-    Vector2 Velocity
-
-    // Needs (0-100)
-    float Hunger
-    float Cleanliness
-    float Happiness
-
-    // State
-    PetState CurrentState
-    AnimationFrame CurrentAnimation
-
-    // Behaviors
-    bool IsChasingMouse
-    bool IsBeingDragged
-    bool IsInHouse
-}
-
-class Reminder {
-    string Message
-    TimeSpan Interval
-    DateTime LastTriggered
-    bool IsEnabled
-}
-```
-
-### 5. Animation System
-
-**Sprite Management**
-
--   Use sprite sheets for smooth animations
--   Each animation state has multiple frames
--   Implement smooth transitions between states
-
-**Animation States**
-
--   Idle (sitting, standing variations)
--   Walking (left/right directions)
--   Running (chasing mouse)
--   Sleeping (z's animation)
--   Playing (batting at toys)
--   Happy/Sad expressions
-
-### 6. Special Considerations
-
-**Performance**
-
--   Use hardware acceleration for rendering
--   Implement efficient collision detection for mouse interaction
--   Throttle animation updates to 30-60 FPS
-
-**User Experience**
-
--   Include "Do Not Disturb" mode
--   Save pet state between sessions (most likely needs a DB)
-
-**Mouse Chasing Behavior**
-
--   Calculate distance to cursor
--   Randomly trigger chase mode when cursor is within range
--   Use easing functions for smooth pursuit
--   Add playful "pounce" animation when close
-
-### 7. Development Tools Needed
-
--   **Visual Studio** for C#/WPF development
--   **Graphics software** for sprite creation (or use free sprite packs)
--   **Git** for version control
--   **WiX Toolset** or similar for creating installer
-
-### 8. File Structure
+## Project Structure
 
 ```
-CatDesktopPet/
-├── Core/
-│   ├── PetController.cs
-│   ├── NeedsSystem.cs
-│   └── StateManager.cs
-├── UI/
-│   ├── MainWindow.xaml
-│   ├── HousePanel.xaml
-│   └── SettingsWindow.xaml
-├── Animation/
-│   ├── AnimationController.cs
-│   └── SpriteManager.cs
-├── Data/
-│   ├── SaveManager.cs
-│   └── ReminderSystem.cs
-└── Resources/
-    ├── Sprites/
-    └── Sounds/
+AMICUS/
+├── Animation/          # AnimationController, SpriteManager, PetState
+├── Data/              # SaveManager, SaveData models
+├── UI/                # DecorationManager, RoomManager
+├── Resources/         # Sprites, sounds
+└── MainWindow.xaml.cs # Main game loop and logic
 ```
