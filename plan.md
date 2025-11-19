@@ -230,6 +230,17 @@
 
 ## Next Steps / TODO
 
+**Immediate Priority - Release Preparation (Section 2 from release.md):**
+
+⏳ **First Startup Setup Experience:**
+
+-   Dialog window for initial setup (middle of screen, cozy/soft colors)
+-   User names their cat (save to persistence)
+-   User picks colors for house decorations (save to persistence)
+-   Interactive demo of house where each element can be clicked to cycle through colors
+-   Save button to complete setup
+-   Subsequent startups use saved preferences
+
 **Future Enhancements**
 
 **Phase 6: Additional Features**
@@ -243,17 +254,16 @@
 
 ⏳ **Settings Menu:**
 
--   Pet customization on first startup
 -   Settings button in room
 -   Sound toggle, reminder management
+-   Edit pet name and decoration colors
 
 ⏳ **Polish:**
 
 -   Sound effects and purring
 -   Additional room types
 -   More interactive items
--   Scoop litter box cleaning mechanic
--   Garbage special interaction
+-   Additional decoration color variants
 
 ## Project Structure
 
