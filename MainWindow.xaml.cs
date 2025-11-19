@@ -221,6 +221,10 @@ namespace AMICUS
         public MainWindow()
         {
             InitializeComponent();
+
+            // Handle window closing to save game state
+            this.Closing += Window_Closing;
+
             SetupSystemTray();
 
             // Initialize animation system
@@ -2604,6 +2608,24 @@ namespace AMICUS
         }
 
         /// <summary>
+        /// Public method to save game state - called during Windows shutdown
+        /// </summary>
+        public void SaveGameStateOnShutdown()
+        {
+            App.Logger.LogInformation("SaveGameStateOnShutdown called");
+            SaveGameState();
+        }
+
+        /// <summary>
+        /// Event handler for Window.Closing - saves game state when window is closed
+        /// </summary>
+        private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            App.Logger.LogInformation("Window closing - saving game state");
+            SaveGameState();
+        }
+
+        /// <summary>
         /// Loads the saved game state from disk
         /// </summary>
         private void LoadGameState()
@@ -2648,17 +2670,28 @@ namespace AMICUS
                 // Check if game was off long enough to spawn time-away poop
                 TimeSpan timeAway = DateTime.UtcNow - saveData.Session.LastExitTime;
 
+                // Sanity check: if LastExitTime is older than 30 days or negative, treat as invalid/first-time save
+                const double MAX_REASONABLE_DAYS_AWAY = 30.0;
+                if (timeAway.TotalDays > MAX_REASONABLE_DAYS_AWAY || timeAway.TotalSeconds < 0)
+                {
+                    App.Logger.LogWarning("LastExitTime appears invalid (time away: {Days:F1} days). Treating as first launch - skipping time-away poop.",
+                        timeAway.TotalDays);
+                    // Don't spawn time-away poop for invalid data
+                }
+                else
+                {
 #if DEBUG
-                double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
+                    double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
 #else
-                double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
+                    double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
 #endif
 
-                if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
-                {
-                    App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
-                        timeAway.TotalSeconds, timeAwayThresholdSeconds);
-                    _shouldSpawnTimeAwayPoop = true;
+                    if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
+                    {
+                        App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
+                            timeAway.TotalSeconds, timeAwayThresholdSeconds);
+                        _shouldSpawnTimeAwayPoop = true;
+                    }
                 }
 
                 // Set cleanliness to 0 if poops existed on exit
