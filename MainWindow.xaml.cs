@@ -2124,7 +2124,7 @@ namespace AMICUS
                     _isPerformingAction = false;
                     _actionTimer = 0;
 
-                    // Return to idle or random state after action
+                    // Return to idle or walking state after action (50/50)
                     var randomValue = _random.NextDouble();
                     if (randomValue < 0.5)
                     {
@@ -2132,13 +2132,6 @@ namespace AMICUS
                         _petVelocityX = 0;
                         _petVelocityY = 0;
                         App.Logger.LogDebug("Action completed → Idle (velocity cleared)");
-                    }
-                    else if (randomValue < 0.75)
-                    {
-                        _animationController.ChangeState(PetState.Playing);
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        App.Logger.LogDebug("Action completed → Playing (velocity cleared)");
                     }
                     else
                     {
