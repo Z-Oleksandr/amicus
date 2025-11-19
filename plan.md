@@ -93,53 +93,83 @@
 -   Rewards: +2 cleanliness, +1 happiness per stroke
 -   Grace period: 3 seconds after brush leaves contact
 
-**Work Session (2025-11-19) - Additional Interactive Items:**
+**Work Session (2025-11-19) - Additional Interactive Items & Poop System:**
 
-✅ **Phase 5.5: Interactive Room Items - In Prgoress**
+✅ **Phase 5.5: Interactive Room Items & Poop System - COMPLETE**
 
 **Scoop (Pickupable Item):**
 
 -   Location: `scoop.png` from CatItems/CatToys
 -   Position: (180, -5) - top-right corner of house panel
 -   Scale: 0.05 normal, 0.08 when picked up
--   Behavior: Draggable like brush, no special interaction yet
+-   Behavior: Draggable like brush, pickup poop interaction
 -   Implementation: Following exact brush pattern
--   Files: `MainWindow.xaml.cs:164-169` (vars), `407-453` (LoadScoop), `1159-1266` (handlers)
+-   Files: `MainWindow.xaml.cs:165-169` (vars), `452-498` (LoadScoop), handlers
 
-**Garbage (Animated GIF - Click-to-Animate):**
+**Garbage (Animated GIF - Proximity-Triggered):**
 
 -   Location: `garbage.gif` (120×120px, animated) from CatItems/CatToys
 -   Position: (10, -5) - top-left corner (symmetrical with scoop)
--   Scale: 0.3 (not pickupable - stays static)
--   Animation: Plays full GIF loop once when clicked (10 FPS)
+-   Scale: 0.37 (not pickupable - stays static)
+-   Animation: Plays full GIF loop once when scoop with poop is near (28 FPS)
 -   GIF frame extraction using WPF's built-in `GifBitmapDecoder`
 -   Idle state: Shows first frame only
+-   Trigger: Proximity detection with scoop holding poop (80px threshold)
 -   Implementation: Custom frame-based animation integrated into game loop
--   Files: `MainWindow.xaml.cs:171-179` (vars), `468-521` (LoadGarbage), `1342-1359` (handler), `1638-1659` (animation update)
+-   Files: `MainWindow.xaml.cs:172-179` (vars), `500-556` (LoadGarbage), `1763-1784` (animation update)
+
+**Poop System:**
+
+-   Random spawning: 50% chance every 1 min (debug) / 1 hour (production)
+-   Spawn conditions: Outside house, Idle/Walking states only
+-   Position: Behind cat based on facing direction (64px right/left, 64px down)
+-   Cleanliness impact: -10 per poop spawn
+-   Visual: `poop.png` sprite at 0.06 scale
+-   Files: `MainWindow.xaml.cs:181-212` (vars/class), `591-647` (SpawnPoop), `2222-2246` (spawn logic)
+
+**Poop Pickup & Disposal:**
+
+-   Scoop proximity detection: 60px threshold to pick up poop
+-   Visual feedback: Scoop changes to `poop_on_scoop.png` when holding poop
+-   Garbage disposal: 80px proximity threshold
+-   Disposal triggers garbage animation automatically
+-   Files: `MainWindow.xaml.cs:1615-1667` (DetectScoopPoopProximity), `1669-1718` (DetectScoopGarbageProximity)
+
+**Poop Persistence:**
+
+-   Save/load: Poop positions saved to `save.json` on exit
+-   Restoration: All poops restored at exact positions on startup
+-   Cleanliness rule: Set to 0 if any poops existed on exit
+-   Time-away poop: 1 random poop spawned if game off >= 3 min (debug) / 3 hours (production)
+-   Time-away cleanliness: Normal -10 decrease (doesn't force to 0)
+-   Random location: Time-away poop spawns at random screen position (not at pet)
+-   Implementation: Deferred loading pattern (restore after images load)
+-   Files:
+    -   `Data/SaveData.cs:51,57-62` (PoopPositionData class, PoopPositions list)
+    -   `MainWindow.xaml.cs:210-212` (restoration state vars)
+    -   `MainWindow.xaml.cs:2463-2468` (save poops)
+    -   `MainWindow.xaml.cs:2641-2672` (load poop data)
+    -   `MainWindow.xaml.cs:2691-2719` (ApplyPoopRestoration)
+    -   `MainWindow.xaml.cs:649-694` (RestorePoop)
+    -   `MainWindow.xaml.cs:696-752` (SpawnRandomPoop)
+
+**Debug Tools:**
+
+-   Debug button available: `poop_debug.md` contains re-add instructions
+-   Button spawns poop at current pet position for testing
+-   Can be re-enabled for future debugging (XAML + handler code documented)
 
 **Technical Notes:**
 
 -   Both items load automatically in LoadRoom()
--   RenderDecorations() updated to include both items
--   Garbage demonstrates new pattern: static clickable animated objects
+-   Garbage changed from click-to-animate to proximity-based
+-   Poop instances managed in `List<PoopInstance>` with positions and spawn times
+-   Game loop integration: Spawn timer, proximity detection, animation updates
+-   Persistence uses deferred loading: save data → load images → restore poops
 
 ## Next Steps / TODO
 
-**In this phase**
-
--   **Cat poop**
-    -   Implement cat leaving poop on the screen every once in a while
-    -   When cat leaves a poop - cleaniness goes down
-    -   Poop drops from a cat (left at the position where cat was) at random times
--   Poop pick up functionality
-    -   use scoop to pick up a poop:
-        -   pick up scoop => bring it over to poop => move scoop over the poop => remove the poop from the screen, replace scoop with scoop with poop
-    -   bring it to the garbage can
-    -   when scoop with poop is over garbage can -> remove poop from scoop, play garbage animation (remove play animation on click from garbage)
--   Resources:
-    -   In `Resources\Sprites\RetroCatsPaid\CatItems\CatToys` use:
-        -   poop.png for poop
-        -   poop_on_scoop.png to replace scoop when pop is picked up by it
+**Future Enhancements**
 
 **Phase 6: Additional Features**
 
