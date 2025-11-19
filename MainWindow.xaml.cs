@@ -168,6 +168,16 @@ namespace AMICUS
         private const double SCOOP_ORIGINAL_SCALE = 0.05; // Scale to fit room
         private const double SCOOP_PICKUP_SCALE = 0.08; // Slightly larger when picked up
 
+        // Garbage (animated GIF item - click to animate, no pickup)
+        private System.Windows.Controls.Image? _garbageImage = null;
+        private List<BitmapFrame> _garbageFrames = new List<BitmapFrame>();
+        private int _garbageCurrentFrame = 0;
+        private bool _isGarbageAnimating = false;
+        private double _garbageAnimationTimer = 0;
+        private System.Windows.Point _garbageOriginalPosition = new System.Windows.Point(3, 5);
+        private const double GARBAGE_SCALE = 0.37; // Original is 120x120
+        private const double GARBAGE_FRAME_DELAY = 0.035; // 28 FPS for smooth animation
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -351,6 +361,9 @@ namespace AMICUS
                 // Load and place interactive scoop (separate from decorations)
                 LoadScoop();
 
+                // Load and place animated garbage (click to animate, not pickupable)
+                LoadGarbage();
+
                 App.Logger.LogInformation("Room loaded successfully");
             }
             catch (Exception ex)
@@ -455,6 +468,61 @@ namespace AMICUS
             }
         }
 
+        private void LoadGarbage()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading garbage GIF...");
+
+                // Load GIF and extract frames using GifBitmapDecoder
+                var decoder = new GifBitmapDecoder(
+                    new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/garbage.gif", UriKind.Relative),
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+
+                // Extract all frames from the GIF
+                foreach (var frame in decoder.Frames)
+                {
+                    var bitmapFrame = BitmapFrame.Create(frame);
+                    bitmapFrame.Freeze(); // Freeze for thread safety and performance
+                    _garbageFrames.Add(bitmapFrame);
+                }
+
+                App.Logger.LogInformation($"Extracted {_garbageFrames.Count} frames from garbage.gif");
+
+                // Create image element with FIRST FRAME ONLY (idle state)
+                _garbageImage = new System.Windows.Controls.Image
+                {
+                    Source = _garbageFrames.Count > 0 ? _garbageFrames[0] : null,
+                    Stretch = Stretch.None,
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                RenderOptions.SetBitmapScalingMode(_garbageImage, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform (no pickup scale - stays at same size)
+                var scaleTransform = new ScaleTransform(GARBAGE_SCALE, GARBAGE_SCALE);
+                _garbageImage.RenderTransform = scaleTransform;
+                _garbageImage.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position on canvas
+                Canvas.SetLeft(_garbageImage, _garbageOriginalPosition.X);
+                Canvas.SetTop(_garbageImage, _garbageOriginalPosition.Y);
+
+                // Add click handler (no move/up handlers - garbage is not pickupable)
+                _garbageImage.MouseLeftButtonDown += Garbage_MouseLeftButtonDown;
+
+                // Add to canvas
+                DecorationsCanvas.Children.Add(_garbageImage);
+
+                App.Logger.LogInformation("Garbage loaded successfully at position ({X}, {Y})",
+                    _garbageOriginalPosition.X, _garbageOriginalPosition.Y);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load garbage");
+            }
+        }
+
         private void RenderDecorations()
         {
             try
@@ -531,6 +599,12 @@ namespace AMICUS
                 if (_scoopImage != null && !_isScoopPickedUp)
                 {
                     DecorationsCanvas.Children.Add(_scoopImage);
+                }
+
+                // Add garbage on top (if exists - garbage is never picked up, always stays in place)
+                if (_garbageImage != null)
+                {
+                    DecorationsCanvas.Children.Add(_garbageImage);
                 }
 
                 App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
@@ -1271,6 +1345,25 @@ namespace AMICUS
 
         #endregion
 
+        #region Garbage Interaction Handler
+
+        private void Garbage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_garbageImage == null || _garbageFrames.Count == 0) return;
+
+            // Only start animation if not already animating
+            if (!_isGarbageAnimating)
+            {
+                App.Logger.LogInformation("Garbage clicked - starting animation");
+                _isGarbageAnimating = true;
+                _garbageCurrentFrame = 0;
+                _garbageAnimationTimer = 0;
+                e.Handled = true;
+            }
+        }
+
+        #endregion
+
         #region Brushing Interaction Methods
 
         private void DetectBrushingInteraction(double deltaTime)
@@ -1546,6 +1639,29 @@ namespace AMICUS
             if (_isBrushPickedUp && _brushImage != null)
             {
                 DetectBrushingInteraction(deltaTime);
+            }
+
+            // Update garbage animation if playing
+            if (_isGarbageAnimating && _garbageImage != null && _garbageFrames.Count > 0)
+            {
+                _garbageAnimationTimer += deltaTime;
+
+                if (_garbageAnimationTimer >= GARBAGE_FRAME_DELAY)
+                {
+                    _garbageAnimationTimer -= GARBAGE_FRAME_DELAY;
+                    _garbageCurrentFrame++;
+
+                    if (_garbageCurrentFrame >= _garbageFrames.Count)
+                    {
+                        // Animation complete - reset to first frame and stop
+                        _garbageCurrentFrame = 0;
+                        _isGarbageAnimating = false;
+                        App.Logger.LogInformation("Garbage animation completed");
+                    }
+
+                    // Update the image source to show current frame
+                    _garbageImage.Source = _garbageFrames[_garbageCurrentFrame];
+                }
             }
 
             // Handle pet in room logic
