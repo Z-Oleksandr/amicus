@@ -983,6 +983,10 @@ namespace AMICUS
                     _animationController.ChangeState(PetState.Playing);
                     _isPerformingAction = true;
                     _actionTimer = 0;
+
+                    // Clear velocity to prevent sliding after release
+                    _petVelocityX = 0;
+                    _petVelocityY = 0;
                 }
 
                 App.Logger.LogInformation("Pet petted! Happiness increased.");
