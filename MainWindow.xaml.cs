@@ -1094,15 +1094,19 @@ namespace AMICUS
                 {
                     eatTimer.Stop();
 
-                    // Cat eats from the bowl
-                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
-                    _isFoodBowlFull = false;
+                    // Only eat if bowl is still full (safety check)
+                    if (_isFoodBowlFull)
+                    {
+                        // Cat eats from the bowl
+                        _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                        _isFoodBowlFull = false;
 
-                    // Re-render decorations to show empty bowl
-                    RenderDecorations();
+                        // Re-render decorations to show empty bowl
+                        RenderDecorations();
 
-                    UpdateNeedsDisplay();
-                    App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                        UpdateNeedsDisplay();
+                        App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                    }
                 };
                 eatTimer.Start();
 
@@ -2048,7 +2052,7 @@ namespace AMICUS
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
                 // Handle proximity timer and chase triggering
-                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive)
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive && !_isBrushingPet)
                 {
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
@@ -2511,9 +2515,10 @@ namespace AMICUS
             // Auto-eat from food bowl if hungry
             if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
             {
-                if (_isPetInRoom)
+                if (_isPetInRoom && !_shouldEatAfterEntering)
                 {
                     // Cat is already in room, eat from the bowl
+                    // (but not if scheduled eating is pending)
                     _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
                     _isFoodBowlFull = false;
 
