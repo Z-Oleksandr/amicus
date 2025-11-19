@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Amicus.Data
 {
@@ -48,6 +49,17 @@ namespace Amicus.Data
     public class RoomStateData
     {
         public bool FoodBowlFull { get; set; }
+        public List<PoopPositionData> PoopPositions { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Individual poop position data for persistence
+    /// </summary>
+    public class PoopPositionData
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+        public DateTime SpawnTime { get; set; }
     }
 
     /// <summary>

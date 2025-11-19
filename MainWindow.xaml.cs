@@ -207,6 +207,10 @@ namespace AMICUS
         private const double CLEANLINESS_LOSS_PER_POOP = 10.0;
         private const double POOP_SCALE = 0.06; // Scale for poop sprite
 
+        // Poop restoration state (saved from LoadGameState, applied after images load)
+        private List<Amicus.Data.PoopPositionData>? _savedPoopPositions = null;
+        private bool _shouldSpawnTimeAwayPoop = false;
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -290,6 +294,9 @@ namespace AMICUS
 
                 // Load the default room
                 LoadRoom();
+
+                // Restore poops now that images are loaded
+                ApplyPoopRestoration();
 
                 // Initialize pet to idle state (or restore from save)
                 if (_isPetInRoom)
@@ -643,6 +650,111 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Failed to spawn poop");
+            }
+        }
+
+        private void RestorePoop(double x, double y, DateTime spawnTime)
+        {
+            try
+            {
+                if (_poopImage == null)
+                {
+                    App.Logger.LogWarning("Cannot restore poop - image not loaded");
+                    return;
+                }
+
+                // Create poop image element
+                var poopImageElement = new System.Windows.Controls.Image
+                {
+                    Source = _poopImage,
+                    Stretch = Stretch.None
+                };
+                RenderOptions.SetBitmapScalingMode(poopImageElement, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(POOP_SCALE, POOP_SCALE);
+                poopImageElement.RenderTransform = scaleTransform;
+                poopImageElement.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position at saved coordinates
+                Canvas.SetLeft(poopImageElement, x);
+                Canvas.SetTop(poopImageElement, y);
+
+                // Add to PetCanvas
+                PetCanvas.Children.Add(poopImageElement);
+
+                // Add to instances list
+                _poopInstances.Add(new PoopInstance
+                {
+                    Image = poopImageElement,
+                    X = x,
+                    Y = y,
+                    SpawnTime = spawnTime
+                });
+
+                App.Logger.LogInformation("Restored poop at ({X:F1}, {Y:F1})", x, y);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to restore poop");
+            }
+        }
+
+        private void SpawnRandomPoop()
+        {
+            try
+            {
+                if (_poopImage == null)
+                {
+                    App.Logger.LogWarning("Cannot spawn random poop - image not loaded");
+                    return;
+                }
+
+                App.Logger.LogInformation("Spawning random time-away poop");
+
+                // Create poop image element
+                var poopImageElement = new System.Windows.Controls.Image
+                {
+                    Source = _poopImage,
+                    Stretch = Stretch.None
+                };
+                RenderOptions.SetBitmapScalingMode(poopImageElement, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(POOP_SCALE, POOP_SCALE);
+                poopImageElement.RenderTransform = scaleTransform;
+                poopImageElement.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Random position on screen (with margins to avoid edges)
+                double margin = 100;
+                double poopX = margin + (_random.NextDouble() * (MainCanvas.ActualWidth - 2 * margin));
+                double poopY = margin + (_random.NextDouble() * (MainCanvas.ActualHeight - 2 * margin));
+
+                Canvas.SetLeft(poopImageElement, poopX);
+                Canvas.SetTop(poopImageElement, poopY);
+
+                // Add to PetCanvas
+                PetCanvas.Children.Add(poopImageElement);
+
+                // Create instance and add to list
+                var poopInstance = new PoopInstance
+                {
+                    Image = poopImageElement,
+                    X = poopX,
+                    Y = poopY,
+                    SpawnTime = DateTime.Now
+                };
+                _poopInstances.Add(poopInstance);
+
+                // Decrease cleanliness by normal amount (-10)
+                _cleanliness = Math.Max(0, _cleanliness - CLEANLINESS_LOSS_PER_POOP);
+
+                App.Logger.LogInformation("Random poop spawned at ({X:F1}, {Y:F1}). Cleanliness: {C:F1}",
+                    poopX, poopY, _cleanliness);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to spawn random poop");
             }
         }
 
@@ -2459,7 +2571,13 @@ namespace AMICUS
                     },
                     RoomState = new Amicus.Data.RoomStateData
                     {
-                        FoodBowlFull = _isFoodBowlFull
+                        FoodBowlFull = _isFoodBowlFull,
+                        PoopPositions = _poopInstances.Select(p => new Amicus.Data.PoopPositionData
+                        {
+                            X = p.X,
+                            Y = p.Y,
+                            SpawnTime = p.SpawnTime
+                        }).ToList()
                     },
                     Session = new Amicus.Data.SessionData
                     {
@@ -2516,6 +2634,39 @@ namespace AMICUS
                 _isRoomLocked = saveData.UserSettings.HouseLocked;
                 _isFoodBowlFull = saveData.RoomState.FoodBowlFull;
 
+                // Save poop data for restoration after images load
+                bool hadPoopsOnExit = saveData.RoomState.PoopPositions != null && saveData.RoomState.PoopPositions.Count > 0;
+
+                if (hadPoopsOnExit && saveData.RoomState.PoopPositions != null)
+                {
+                    _savedPoopPositions = saveData.RoomState.PoopPositions;
+                    App.Logger.LogInformation("Found {Count} poop(s) to restore after images load", saveData.RoomState.PoopPositions.Count);
+                }
+
+                // Check if game was off long enough to spawn time-away poop
+                TimeSpan timeAway = DateTime.UtcNow - saveData.Session.LastExitTime;
+
+#if DEBUG
+                double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
+#else
+                double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
+#endif
+
+                if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
+                {
+                    App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
+                        timeAway.TotalSeconds, timeAwayThresholdSeconds);
+                    _shouldSpawnTimeAwayPoop = true;
+                }
+
+                // Set cleanliness to 0 if poops existed on exit
+                // (Time-away poop cleanliness decrease will be applied when spawned)
+                if (hadPoopsOnExit)
+                {
+                    _cleanliness = 0;
+                    App.Logger.LogInformation("Poops existed on exit - cleanliness set to 0");
+                }
+
                 App.Logger.LogInformation("Game state loaded successfully");
                 App.Logger.LogInformation("Pet position: ({X}, {Y})", _petX, _petY);
                 App.Logger.LogInformation("Needs - Hunger: {H}, Cleanliness: {C}, Happiness: {Hp}",
@@ -2526,6 +2677,40 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Error loading game state");
+            }
+        }
+
+        /// <summary>
+        /// Restores saved poops and spawns time-away poop if needed.
+        /// Called after LoadRoom() ensures poop images are loaded.
+        /// </summary>
+        private void ApplyPoopRestoration()
+        {
+            try
+            {
+                // Restore saved poops first
+                if (_savedPoopPositions != null && _savedPoopPositions.Count > 0)
+                {
+                    App.Logger.LogInformation("Restoring {Count} saved poop(s)...", _savedPoopPositions.Count);
+                    foreach (var poopData in _savedPoopPositions)
+                    {
+                        RestorePoop(poopData.X, poopData.Y, poopData.SpawnTime);
+                    }
+                    App.Logger.LogInformation("Successfully restored {Count} poop(s)", _poopInstances.Count);
+                    _savedPoopPositions = null; // Clear after restoration
+                }
+
+                // Spawn time-away poop if needed
+                if (_shouldSpawnTimeAwayPoop)
+                {
+                    App.Logger.LogInformation("Spawning time-away poop...");
+                    SpawnRandomPoop();
+                    _shouldSpawnTimeAwayPoop = false; // Clear flag
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error applying poop restoration");
             }
         }
 
