@@ -161,6 +161,56 @@ namespace AMICUS
         private const double HAPPINESS_PER_STROKE = 1.0; // Reduced from 3.0 for balanced progression
         private const double BRUSH_GRACE_PERIOD = 3.0; // Seconds to wait before ending brushing session
 
+        // Scoop (interactive item)
+        private System.Windows.Controls.Image? _scoopImage = null;
+        private bool _isScoopPickedUp = false;
+        private System.Windows.Point _scoopOriginalPosition = new System.Windows.Point(180, -5);
+        private const double SCOOP_ORIGINAL_SCALE = 0.05; // Scale to fit room
+        private const double SCOOP_PICKUP_SCALE = 0.08; // Slightly larger when picked up
+
+        // Garbage (animated GIF item - click to animate, no pickup)
+        private System.Windows.Controls.Image? _garbageImage = null;
+        private List<BitmapFrame> _garbageFrames = new List<BitmapFrame>();
+        private int _garbageCurrentFrame = 0;
+        private bool _isGarbageAnimating = false;
+        private double _garbageAnimationTimer = 0;
+        private System.Windows.Point _garbageOriginalPosition = new System.Windows.Point(3, 5);
+        private const double GARBAGE_SCALE = 0.37; // Original is 120x120
+        private const double GARBAGE_FRAME_DELAY = 0.035; // 28 FPS for smooth animation
+
+        // Poop system
+        private class PoopInstance
+        {
+            public System.Windows.Controls.Image Image { get; set; } = null!;
+            public double X { get; set; }
+            public double Y { get; set; }
+            public DateTime SpawnTime { get; set; }
+        }
+
+        private List<PoopInstance> _poopInstances = new List<PoopInstance>();
+        private BitmapImage? _poopImage = null;
+        private double _poopSpawnTimer = 0;
+#if DEBUG
+        private double _poopSpawnInterval = 60.0; // 1 minute in debug mode
+#else
+        private double _poopSpawnInterval = 3600.0; // 1 hour in production
+#endif
+
+        // Scoop with poop state
+        private bool _isScoopHoldingPoop = false;
+        private BitmapImage? _scoopNormalImage = null;
+        private BitmapImage? _scoopWithPoopImage = null;
+
+        // Poop interaction constants
+        private const double POOP_PICKUP_DISTANCE = 40.0;
+        private const double GARBAGE_DISPOSAL_DISTANCE = 50.0;
+        private const double CLEANLINESS_LOSS_PER_POOP = 10.0;
+        private const double POOP_SCALE = 0.06; // Scale for poop sprite
+
+        // Poop restoration state (saved from LoadGameState, applied after images load)
+        private List<Amicus.Data.PoopPositionData>? _savedPoopPositions = null;
+        private bool _shouldSpawnTimeAwayPoop = false;
+
         // Walk to house to eat state
         private bool _isWalkingToHouse = false;
         private bool _shouldEatAfterEntering = false;
@@ -244,6 +294,9 @@ namespace AMICUS
 
                 // Load the default room
                 LoadRoom();
+
+                // Restore poops now that images are loaded
+                ApplyPoopRestoration();
 
                 // Initialize pet to idle state (or restore from save)
                 if (_isPetInRoom)
@@ -341,6 +394,15 @@ namespace AMICUS
                 // Load and place interactive brush (separate from decorations)
                 LoadBrush();
 
+                // Load and place interactive scoop (separate from decorations)
+                LoadScoop();
+
+                // Load and place animated garbage (click to animate, not pickupable)
+                LoadGarbage();
+
+                // Load poop images (for spawning and scoop interaction)
+                LoadPoopImages();
+
                 App.Logger.LogInformation("Room loaded successfully");
             }
             catch (Exception ex)
@@ -394,6 +456,305 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Failed to load brush");
+            }
+        }
+
+        private void LoadScoop()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading interactive scoop...");
+
+                // Load scoop image
+                var scoopBitmap = new BitmapImage();
+                scoopBitmap.BeginInit();
+                scoopBitmap.UriSource = new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/scoop.png", UriKind.Relative);
+                scoopBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                scoopBitmap.EndInit();
+                scoopBitmap.Freeze(); // Freeze for performance and thread safety
+
+                // Save reference to normal scoop image
+                _scoopNormalImage = scoopBitmap;
+
+                // Create image element
+                _scoopImage = new System.Windows.Controls.Image
+                {
+                    Source = scoopBitmap,
+                    Stretch = Stretch.None,
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                RenderOptions.SetBitmapScalingMode(_scoopImage, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(SCOOP_ORIGINAL_SCALE, SCOOP_ORIGINAL_SCALE);
+                _scoopImage.RenderTransform = scaleTransform;
+                _scoopImage.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position on canvas
+                Canvas.SetLeft(_scoopImage, _scoopOriginalPosition.X);
+                Canvas.SetTop(_scoopImage, _scoopOriginalPosition.Y);
+
+                // Add event handlers
+                _scoopImage.MouseLeftButtonDown += Scoop_MouseLeftButtonDown;
+                _scoopImage.MouseLeftButtonUp += Scoop_MouseLeftButtonUp;
+                _scoopImage.MouseMove += Scoop_MouseMove;
+
+                // Add to canvas (on top of all decorations)
+                DecorationsCanvas.Children.Add(_scoopImage);
+
+                App.Logger.LogInformation("Scoop loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load scoop");
+            }
+        }
+
+        private void LoadGarbage()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading garbage GIF...");
+
+                // Load GIF and extract frames using GifBitmapDecoder
+                var decoder = new GifBitmapDecoder(
+                    new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/garbage.gif", UriKind.Relative),
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+
+                // Extract all frames from the GIF
+                foreach (var frame in decoder.Frames)
+                {
+                    var bitmapFrame = BitmapFrame.Create(frame);
+                    bitmapFrame.Freeze(); // Freeze for thread safety and performance
+                    _garbageFrames.Add(bitmapFrame);
+                }
+
+                App.Logger.LogInformation($"Extracted {_garbageFrames.Count} frames from garbage.gif");
+
+                // Create image element with FIRST FRAME ONLY (idle state)
+                _garbageImage = new System.Windows.Controls.Image
+                {
+                    Source = _garbageFrames.Count > 0 ? _garbageFrames[0] : null,
+                    Stretch = Stretch.None,
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                RenderOptions.SetBitmapScalingMode(_garbageImage, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform (no pickup scale - stays at same size)
+                var scaleTransform = new ScaleTransform(GARBAGE_SCALE, GARBAGE_SCALE);
+                _garbageImage.RenderTransform = scaleTransform;
+                _garbageImage.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position on canvas
+                Canvas.SetLeft(_garbageImage, _garbageOriginalPosition.X);
+                Canvas.SetTop(_garbageImage, _garbageOriginalPosition.Y);
+
+                // No event handlers - garbage animates via proximity detection with scoop
+                // (not pickupable, not clickable)
+
+                // Add to canvas
+                DecorationsCanvas.Children.Add(_garbageImage);
+
+                App.Logger.LogInformation("Garbage loaded successfully at position ({X}, {Y})",
+                    _garbageOriginalPosition.X, _garbageOriginalPosition.Y);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load garbage");
+            }
+        }
+
+        private void LoadPoopImages()
+        {
+            try
+            {
+                App.Logger.LogInformation("Loading poop images...");
+
+                // Load poop image
+                _poopImage = new BitmapImage();
+                _poopImage.BeginInit();
+                _poopImage.UriSource = new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/poop.png", UriKind.Relative);
+                _poopImage.CacheOption = BitmapCacheOption.OnLoad;
+                _poopImage.EndInit();
+                _poopImage.Freeze(); // Freeze for performance and thread safety
+
+                // Load scoop with poop image
+                _scoopWithPoopImage = new BitmapImage();
+                _scoopWithPoopImage.BeginInit();
+                _scoopWithPoopImage.UriSource = new Uri("Resources/Sprites/RetroCatsPaid/CatItems/CatToys/poop_on_scoop.png", UriKind.Relative);
+                _scoopWithPoopImage.CacheOption = BitmapCacheOption.OnLoad;
+                _scoopWithPoopImage.EndInit();
+                _scoopWithPoopImage.Freeze(); // Freeze for performance and thread safety
+
+                App.Logger.LogInformation("Poop images loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to load poop images");
+            }
+        }
+
+        private void SpawnPoop()
+        {
+            try
+            {
+                if (_poopImage == null)
+                {
+                    App.Logger.LogWarning("Cannot spawn poop - poop image not loaded");
+                    return;
+                }
+
+                App.Logger.LogInformation("Spawning poop at pet position ({X:F1}, {Y:F1})", _petX, _petY);
+
+                // Create poop image
+                var poopImageElement = new System.Windows.Controls.Image
+                {
+                    Source = _poopImage,
+                    Stretch = Stretch.None
+                };
+                RenderOptions.SetBitmapScalingMode(poopImageElement, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(POOP_SCALE, POOP_SCALE);
+                poopImageElement.RenderTransform = scaleTransform;
+                poopImageElement.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position at current pet location + offset based on facing direction
+                // If facing left: 64px right, 64px down
+                // If facing right: 64px left, 64px down
+                double poopX = _animationController.CurrentDirection == PetDirection.Left
+                    ? _petX + 70
+                    : _petX - 6;
+                double poopY = _petY + 64;
+                Canvas.SetLeft(poopImageElement, poopX);
+                Canvas.SetTop(poopImageElement, poopY);
+
+                // Add to PetCanvas (below pet, above decorations)
+                PetCanvas.Children.Add(poopImageElement);
+
+                // Create poop instance and add to list
+                var poopInstance = new PoopInstance
+                {
+                    Image = poopImageElement,
+                    X = poopX,
+                    Y = poopY,
+                    SpawnTime = DateTime.Now
+                };
+                _poopInstances.Add(poopInstance);
+
+                // Decrease cleanliness
+                _cleanliness = Math.Max(0, _cleanliness - CLEANLINESS_LOSS_PER_POOP);
+                App.Logger.LogInformation("Poop spawned! Cleanliness decreased to {Cleanliness:F1}", _cleanliness);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to spawn poop");
+            }
+        }
+
+        private void RestorePoop(double x, double y, DateTime spawnTime)
+        {
+            try
+            {
+                if (_poopImage == null)
+                {
+                    App.Logger.LogWarning("Cannot restore poop - image not loaded");
+                    return;
+                }
+
+                // Create poop image element
+                var poopImageElement = new System.Windows.Controls.Image
+                {
+                    Source = _poopImage,
+                    Stretch = Stretch.None
+                };
+                RenderOptions.SetBitmapScalingMode(poopImageElement, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(POOP_SCALE, POOP_SCALE);
+                poopImageElement.RenderTransform = scaleTransform;
+                poopImageElement.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Position at saved coordinates
+                Canvas.SetLeft(poopImageElement, x);
+                Canvas.SetTop(poopImageElement, y);
+
+                // Add to PetCanvas
+                PetCanvas.Children.Add(poopImageElement);
+
+                // Add to instances list
+                _poopInstances.Add(new PoopInstance
+                {
+                    Image = poopImageElement,
+                    X = x,
+                    Y = y,
+                    SpawnTime = spawnTime
+                });
+
+                App.Logger.LogInformation("Restored poop at ({X:F1}, {Y:F1})", x, y);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to restore poop");
+            }
+        }
+
+        private void SpawnRandomPoop()
+        {
+            try
+            {
+                if (_poopImage == null)
+                {
+                    App.Logger.LogWarning("Cannot spawn random poop - image not loaded");
+                    return;
+                }
+
+                App.Logger.LogInformation("Spawning random time-away poop");
+
+                // Create poop image element
+                var poopImageElement = new System.Windows.Controls.Image
+                {
+                    Source = _poopImage,
+                    Stretch = Stretch.None
+                };
+                RenderOptions.SetBitmapScalingMode(poopImageElement, BitmapScalingMode.NearestNeighbor);
+
+                // Apply scale transform
+                var scaleTransform = new ScaleTransform(POOP_SCALE, POOP_SCALE);
+                poopImageElement.RenderTransform = scaleTransform;
+                poopImageElement.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+                // Random position on screen (with margins to avoid edges)
+                double margin = 100;
+                double poopX = margin + (_random.NextDouble() * (MainCanvas.ActualWidth - 2 * margin));
+                double poopY = margin + (_random.NextDouble() * (MainCanvas.ActualHeight - 2 * margin));
+
+                Canvas.SetLeft(poopImageElement, poopX);
+                Canvas.SetTop(poopImageElement, poopY);
+
+                // Add to PetCanvas
+                PetCanvas.Children.Add(poopImageElement);
+
+                // Create instance and add to list
+                var poopInstance = new PoopInstance
+                {
+                    Image = poopImageElement,
+                    X = poopX,
+                    Y = poopY,
+                    SpawnTime = DateTime.Now
+                };
+                _poopInstances.Add(poopInstance);
+
+                // Decrease cleanliness by normal amount (-10)
+                _cleanliness = Math.Max(0, _cleanliness - CLEANLINESS_LOSS_PER_POOP);
+
+                App.Logger.LogInformation("Random poop spawned at ({X:F1}, {Y:F1}). Cleanliness: {C:F1}",
+                    poopX, poopY, _cleanliness);
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Failed to spawn random poop");
             }
         }
 
@@ -467,6 +828,18 @@ namespace AMICUS
                 if (_brushImage != null && !_isBrushPickedUp)
                 {
                     DecorationsCanvas.Children.Add(_brushImage);
+                }
+
+                // Add scoop on top (if exists and not picked up)
+                if (_scoopImage != null && !_isScoopPickedUp)
+                {
+                    DecorationsCanvas.Children.Add(_scoopImage);
+                }
+
+                // Add garbage on top (if exists - garbage is never picked up, always stays in place)
+                if (_garbageImage != null)
+                {
+                    DecorationsCanvas.Children.Add(_garbageImage);
                 }
 
                 App.Logger.LogDebug($"Rendered {placedDecorations.Count} decorations");
@@ -721,15 +1094,19 @@ namespace AMICUS
                 {
                     eatTimer.Stop();
 
-                    // Cat eats from the bowl
-                    _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
-                    _isFoodBowlFull = false;
+                    // Only eat if bowl is still full (safety check)
+                    if (_isFoodBowlFull)
+                    {
+                        // Cat eats from the bowl
+                        _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
+                        _isFoodBowlFull = false;
 
-                    // Re-render decorations to show empty bowl
-                    RenderDecorations();
+                        // Re-render decorations to show empty bowl
+                        RenderDecorations();
 
-                    UpdateNeedsDisplay();
-                    App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                        UpdateNeedsDisplay();
+                        App.Logger.LogInformation("Cat ate from food bowl after entering room! Hunger restored to {Hunger}", _hunger);
+                    }
                 };
                 eatTimer.Start();
 
@@ -1098,6 +1475,115 @@ namespace AMICUS
 
         #endregion
 
+        #region Scoop Interaction Handlers
+
+        private void Scoop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_scoopImage == null) return;
+
+            App.Logger.LogInformation("Scoop picked up");
+            _isScoopPickedUp = true;
+            e.Handled = true;
+
+            // Get current position in DecorationsCanvas
+            double scoopX = Canvas.GetLeft(_scoopImage);
+            double scoopY = Canvas.GetTop(_scoopImage);
+
+            // Transform position from DecorationsCanvas to PetCanvas
+            // Since they're siblings, we need to use TransformToVisual instead of TransformToAncestor
+            var decorationsPoint = new System.Windows.Point(scoopX, scoopY);
+            var transform = DecorationsCanvas.TransformToVisual(PetCanvas);
+            var petCanvasPoint = transform.Transform(decorationsPoint);
+
+            // Remove from decorations canvas
+            DecorationsCanvas.Children.Remove(_scoopImage);
+
+            // Scale up (note: this changes the visual size but not the position)
+            _scoopImage.RenderTransform = new ScaleTransform(SCOOP_PICKUP_SCALE, SCOOP_PICKUP_SCALE);
+
+            // Set position in PetCanvas coordinates
+            Canvas.SetLeft(_scoopImage, petCanvasPoint.X);
+            Canvas.SetTop(_scoopImage, petCanvasPoint.Y);
+
+            // Add to PetCanvas to render on top of everything
+            PetCanvas.Children.Add(_scoopImage);
+
+            // Capture mouse for smooth dragging
+            _scoopImage.CaptureMouse();
+        }
+
+        private void Scoop_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (!_isScoopPickedUp || _scoopImage == null) return;
+
+            // Get mouse position relative to PetCanvas
+            var mousePos = e.GetPosition(PetCanvas);
+
+            // Center scoop on cursor (accounting for scale) with slight offset
+            var scoopSource = _scoopImage.Source as BitmapImage;
+            if (scoopSource != null)
+            {
+                double scaledWidth = scoopSource.PixelWidth * SCOOP_PICKUP_SCALE;
+                double scaledHeight = scoopSource.PixelHeight * SCOOP_PICKUP_SCALE;
+
+                // Offset: 28px to the right, 9px higher (add for cursor up)
+                Canvas.SetLeft(_scoopImage, mousePos.X - scaledWidth / 2 - 28);
+                Canvas.SetTop(_scoopImage, mousePos.Y - scaledHeight / 2 + 9);
+            }
+        }
+
+        private void Scoop_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isScoopPickedUp || _scoopImage == null) return;
+
+            App.Logger.LogInformation("Scoop released, returning to original position");
+
+            // Release mouse capture
+            _scoopImage.ReleaseMouseCapture();
+
+            // Remove from PetCanvas
+            PetCanvas.Children.Remove(_scoopImage);
+
+            // Animate back to original position and scale
+            AnimateScoopReturn();
+
+            // Only set flag to false AFTER scoop is safely back in DecorationsCanvas
+            _isScoopPickedUp = false;
+        }
+
+        private void AnimateScoopReturn()
+        {
+            if (_scoopImage == null) return;
+
+            // Ensure scoop is completely removed from PetCanvas (defensive programming)
+            if (PetCanvas.Children.Contains(_scoopImage))
+            {
+                PetCanvas.Children.Remove(_scoopImage);
+                App.Logger.LogDebug("Removed scoop from PetCanvas in AnimateScoopReturn");
+            }
+
+            // Reset scale
+            _scoopImage.RenderTransform = new ScaleTransform(SCOOP_ORIGINAL_SCALE, SCOOP_ORIGINAL_SCALE);
+
+            // Reset position
+            Canvas.SetLeft(_scoopImage, _scoopOriginalPosition.X);
+            Canvas.SetTop(_scoopImage, _scoopOriginalPosition.Y);
+
+            // Only add back to decorations canvas if it's not already there
+            if (!DecorationsCanvas.Children.Contains(_scoopImage))
+            {
+                DecorationsCanvas.Children.Add(_scoopImage);
+                App.Logger.LogInformation("Scoop returned to position ({X}, {Y})",
+                    _scoopOriginalPosition.X, _scoopOriginalPosition.Y);
+            }
+            else
+            {
+                App.Logger.LogWarning("Scoop was already in DecorationsCanvas");
+            }
+        }
+
+        #endregion
+
         #region Brushing Interaction Methods
 
         private void DetectBrushingInteraction(double deltaTime)
@@ -1225,6 +1711,111 @@ namespace AMICUS
 
             App.Logger.LogDebug("Brush stroke #{Count}: Cleanliness = {Clean:F1}, Happiness = {Happy:F1}",
                 _brushingStrokeCount, _cleanliness, _happiness);
+        }
+
+        private void DetectScoopPoopProximity()
+        {
+            if (_scoopImage == null || !_isScoopPickedUp || _isScoopHoldingPoop)
+                return;
+
+            // Get scoop position in PetCanvas coordinates
+            double scoopX = Canvas.GetLeft(_scoopImage);
+            double scoopY = Canvas.GetTop(_scoopImage);
+
+            // Get scoop center (approximate based on scoop image size and scale)
+            double scoopCenterX = scoopX + ((_scoopImage.ActualWidth * SCOOP_PICKUP_SCALE) / 2);
+            double scoopCenterY = scoopY + ((_scoopImage.ActualHeight * SCOOP_PICKUP_SCALE) / 2);
+
+            // Check proximity to each poop instance
+            for (int i = _poopInstances.Count - 1; i >= 0; i--)
+            {
+                var poop = _poopInstances[i];
+
+                // Get poop center
+                double poopCenterX = poop.X + ((poop.Image.ActualWidth * POOP_SCALE) / 2);
+                double poopCenterY = poop.Y + ((poop.Image.ActualHeight * POOP_SCALE) / 2);
+
+                // Calculate distance
+                double deltaX = scoopCenterX - poopCenterX;
+                double deltaY = scoopCenterY - poopCenterY;
+                double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                // Check if scoop is close enough to pick up poop
+                if (distance < POOP_PICKUP_DISTANCE)
+                {
+                    // Pick up the poop!
+                    App.Logger.LogInformation("Scoop picked up poop at ({X:F1}, {Y:F1})", poop.X, poop.Y);
+
+                    // Remove poop image from canvas
+                    PetCanvas.Children.Remove(poop.Image);
+
+                    // Remove from instances list
+                    _poopInstances.RemoveAt(i);
+
+                    // Mark scoop as holding poop
+                    _isScoopHoldingPoop = true;
+
+                    // Change scoop image to scoop with poop
+                    if (_scoopWithPoopImage != null)
+                    {
+                        _scoopImage.Source = _scoopWithPoopImage;
+                    }
+
+                    // Only pick up one poop at a time
+                    break;
+                }
+            }
+        }
+
+        private void DetectScoopGarbageProximity()
+        {
+            if (_scoopImage == null || !_isScoopPickedUp || !_isScoopHoldingPoop || _garbageImage == null)
+                return;
+
+            // Get scoop position in PetCanvas coordinates
+            double scoopX = Canvas.GetLeft(_scoopImage);
+            double scoopY = Canvas.GetTop(_scoopImage);
+
+            // Get scoop center
+            double scoopCenterX = scoopX + ((_scoopImage.ActualWidth * SCOOP_PICKUP_SCALE) / 2);
+            double scoopCenterY = scoopY + ((_scoopImage.ActualHeight * SCOOP_PICKUP_SCALE) / 2);
+
+            // Get garbage position (it's in DecorationsCanvas, need to convert coordinates)
+            // Garbage is positioned relative to HousePanel which is at bottom-right
+            // We need to get its position in screen/main canvas coordinates
+            var garbagePosition = _garbageImage.TransformToAncestor(MainCanvas).Transform(new System.Windows.Point(0, 0));
+
+            // Get garbage center
+            double garbageCenterX = garbagePosition.X + ((_garbageImage.ActualWidth * GARBAGE_SCALE) / 2);
+            double garbageCenterY = garbagePosition.Y + ((_garbageImage.ActualHeight * GARBAGE_SCALE) / 2);
+
+            // Calculate distance
+            double deltaX = scoopCenterX - garbageCenterX;
+            double deltaY = scoopCenterY - garbageCenterY;
+            double distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // Check if scoop is close enough to dispose poop in garbage
+            if (distance < GARBAGE_DISPOSAL_DISTANCE)
+            {
+                // Dispose of the poop!
+                App.Logger.LogInformation("Poop disposed in garbage!");
+
+                // Reset scoop state
+                _isScoopHoldingPoop = false;
+
+                // Change scoop image back to normal
+                if (_scoopNormalImage != null)
+                {
+                    _scoopImage.Source = _scoopNormalImage;
+                }
+
+                // Trigger garbage animation
+                _isGarbageAnimating = true;
+                _garbageCurrentFrame = 0;
+                _garbageAnimationTimer = 0;
+
+                App.Logger.LogInformation("Garbage animation triggered by poop disposal");
+            }
         }
 
         #endregion
@@ -1375,6 +1966,44 @@ namespace AMICUS
                 DetectBrushingInteraction(deltaTime);
             }
 
+            // Update garbage animation if playing
+            if (_isGarbageAnimating && _garbageImage != null && _garbageFrames.Count > 0)
+            {
+                _garbageAnimationTimer += deltaTime;
+
+                if (_garbageAnimationTimer >= GARBAGE_FRAME_DELAY)
+                {
+                    _garbageAnimationTimer -= GARBAGE_FRAME_DELAY;
+                    _garbageCurrentFrame++;
+
+                    if (_garbageCurrentFrame >= _garbageFrames.Count)
+                    {
+                        // Animation complete - reset to first frame and stop
+                        _garbageCurrentFrame = 0;
+                        _isGarbageAnimating = false;
+                        App.Logger.LogInformation("Garbage animation completed");
+                    }
+
+                    // Update the image source to show current frame
+                    _garbageImage.Source = _garbageFrames[_garbageCurrentFrame];
+                }
+            }
+
+            // Detect scoop interactions (if scoop is picked up)
+            if (_isScoopPickedUp && _scoopImage != null)
+            {
+                // Check for poop pickup (only if not holding poop)
+                if (!_isScoopHoldingPoop)
+                {
+                    DetectScoopPoopProximity();
+                }
+                // Check for garbage disposal (only if holding poop)
+                else
+                {
+                    DetectScoopGarbageProximity();
+                }
+            }
+
             // Handle pet in room logic
             if (_isPetInRoom)
             {
@@ -1423,7 +2052,7 @@ namespace AMICUS
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
                 // Handle proximity timer and chase triggering
-                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive)
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive && !_isBrushingPet)
                 {
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
@@ -1706,6 +2335,32 @@ namespace AMICUS
                 _wanderTimer += deltaTime;
                 _idleTimer += deltaTime;
 
+                // Poop spawning system (only when outside and in Idle/Walking states)
+                if ((_animationController.CurrentState == PetState.Idle || _animationController.CurrentState == PetState.Walking))
+                {
+                    _poopSpawnTimer += deltaTime;
+
+                    if (_poopSpawnTimer >= _poopSpawnInterval)
+                    {
+                        // 50% random chance to spawn poop
+                        if (_random.NextDouble() < 0.5)
+                        {
+                            SpawnPoop();
+                        }
+
+                        // Reset timer for next poop spawn
+                        _poopSpawnTimer = 0;
+
+                        // Randomize next interval slightly (±10%)
+                        double variance = (_random.NextDouble() - 0.5) * 0.2 * _poopSpawnInterval;
+#if DEBUG
+                        _poopSpawnInterval = 60.0 + variance;
+#else
+                        _poopSpawnInterval = 3600.0 + variance;
+#endif
+                    }
+                }
+
                 // Random direction changes during walking
                 if (_animationController.CurrentState == PetState.Walking && _wanderTimer >= _wanderInterval)
                 {
@@ -1860,9 +2515,10 @@ namespace AMICUS
             // Auto-eat from food bowl if hungry
             if (_isFoodBowlFull && _hunger < AUTO_EAT_THRESHOLD)
             {
-                if (_isPetInRoom)
+                if (_isPetInRoom && !_shouldEatAfterEntering)
                 {
                     // Cat is already in room, eat from the bowl
+                    // (but not if scheduled eating is pending)
                     _hunger = Math.Min(100, _hunger + FOOD_BOWL_FILL_AMOUNT);
                     _isFoodBowlFull = false;
 
@@ -1920,7 +2576,13 @@ namespace AMICUS
                     },
                     RoomState = new Amicus.Data.RoomStateData
                     {
-                        FoodBowlFull = _isFoodBowlFull
+                        FoodBowlFull = _isFoodBowlFull,
+                        PoopPositions = _poopInstances.Select(p => new Amicus.Data.PoopPositionData
+                        {
+                            X = p.X,
+                            Y = p.Y,
+                            SpawnTime = p.SpawnTime
+                        }).ToList()
                     },
                     Session = new Amicus.Data.SessionData
                     {
@@ -1977,6 +2639,39 @@ namespace AMICUS
                 _isRoomLocked = saveData.UserSettings.HouseLocked;
                 _isFoodBowlFull = saveData.RoomState.FoodBowlFull;
 
+                // Save poop data for restoration after images load
+                bool hadPoopsOnExit = saveData.RoomState.PoopPositions != null && saveData.RoomState.PoopPositions.Count > 0;
+
+                if (hadPoopsOnExit && saveData.RoomState.PoopPositions != null)
+                {
+                    _savedPoopPositions = saveData.RoomState.PoopPositions;
+                    App.Logger.LogInformation("Found {Count} poop(s) to restore after images load", saveData.RoomState.PoopPositions.Count);
+                }
+
+                // Check if game was off long enough to spawn time-away poop
+                TimeSpan timeAway = DateTime.UtcNow - saveData.Session.LastExitTime;
+
+#if DEBUG
+                double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
+#else
+                double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
+#endif
+
+                if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
+                {
+                    App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
+                        timeAway.TotalSeconds, timeAwayThresholdSeconds);
+                    _shouldSpawnTimeAwayPoop = true;
+                }
+
+                // Set cleanliness to 0 if poops existed on exit
+                // (Time-away poop cleanliness decrease will be applied when spawned)
+                if (hadPoopsOnExit)
+                {
+                    _cleanliness = 0;
+                    App.Logger.LogInformation("Poops existed on exit - cleanliness set to 0");
+                }
+
                 App.Logger.LogInformation("Game state loaded successfully");
                 App.Logger.LogInformation("Pet position: ({X}, {Y})", _petX, _petY);
                 App.Logger.LogInformation("Needs - Hunger: {H}, Cleanliness: {C}, Happiness: {Hp}",
@@ -1987,6 +2682,40 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Error loading game state");
+            }
+        }
+
+        /// <summary>
+        /// Restores saved poops and spawns time-away poop if needed.
+        /// Called after LoadRoom() ensures poop images are loaded.
+        /// </summary>
+        private void ApplyPoopRestoration()
+        {
+            try
+            {
+                // Restore saved poops first
+                if (_savedPoopPositions != null && _savedPoopPositions.Count > 0)
+                {
+                    App.Logger.LogInformation("Restoring {Count} saved poop(s)...", _savedPoopPositions.Count);
+                    foreach (var poopData in _savedPoopPositions)
+                    {
+                        RestorePoop(poopData.X, poopData.Y, poopData.SpawnTime);
+                    }
+                    App.Logger.LogInformation("Successfully restored {Count} poop(s)", _poopInstances.Count);
+                    _savedPoopPositions = null; // Clear after restoration
+                }
+
+                // Spawn time-away poop if needed
+                if (_shouldSpawnTimeAwayPoop)
+                {
+                    App.Logger.LogInformation("Spawning time-away poop...");
+                    SpawnRandomPoop();
+                    _shouldSpawnTimeAwayPoop = false; // Clear flag
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error applying poop restoration");
             }
         }
 
