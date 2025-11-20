@@ -175,10 +175,16 @@
 
 ⏳ **Reminder System:**
 
--   Drink water reminders
--   Exercise reminders
--   Custom user reminders
--   Notification system
+    - The pet should sometimes give friendly reminders to the user.
+    - In the SetupWindow there should be a checkbox, which will say "Give reminders" => if checked the cat will do reminders functionality, if not, the cat won't.
+    - Visually the reminders should use `Resources\elements\control\message_bubble.png` as background and display text on that. If the cat is at the top of the screen or if too close to one of the sides, so that the reminder doesn't fit onto the screen, it should be pushed away from the edge of the screen until it fits.
+    - To dismiss the reminder, the user should just click on the message bubble.
+
+    -   Drink water reminders: the drink water reminders should come once every 1,5 hours (for development make it once every 3 minutes). Claude should create several messages in a "cute cat style" (some funny, some a bit sarcastic) which would remind the user to drink some water. Every time it is time to give water reminder a random one should be chosen.
+
+    -   Exercise reminders: exercise reminder should come once every hour and for the rest it should follow the template of the water reminder.
+
+    -   Custom user reminders: to create a custom reminder, the user should click on the table in the cat's house. When clicked a window (similar to setupwindow) should pop up. In this window the user can enter a reminder message (limit a reasonable amount of characters, make the message bubble adjust it's size based on the amount of characters), enter a date and time at which the cat should display the reminder. App should use system time for this. If the cat was off while the reminder was supposed to come the cat should display the reminder at next start up and put "MISSED" at the beginning of the text.
 
 ⏳ **Settings Menu:**
 
