@@ -61,6 +61,22 @@ namespace AMICUS
                 var ex = args.ExceptionObject as Exception;
                 Logger.LogCritical(ex, "Fatal unhandled exception occurred");
             };
+
+            // Handle Windows shutdown/restart/logoff
+            this.SessionEnding += OnSessionEnding;
+        }
+
+        private void OnSessionEnding(object sender, SessionEndingCancelEventArgs e)
+        {
+            Logger?.LogInformation("Windows session ending (Reason: {Reason}). Saving game state...", e.ReasonSessionEnding);
+
+            // Get the MainWindow and trigger save
+            if (this.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.SaveGameStateOnShutdown();
+            }
+
+            Logger?.LogInformation("Game state saved before session end");
         }
 
         protected override void OnExit(ExitEventArgs e)

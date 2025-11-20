@@ -36,11 +36,10 @@ namespace Amicus.Data
     public class UserSettingsData
     {
         public bool HouseLocked { get; set; }
-        public string PetName { get; set; } = "Cat"; // Future feature
-        public bool SoundEnabled { get; set; } = true; // Future feature
-
-        // Future: decoration color preferences
-        // public Dictionary<string, int> DecorationColors { get; set; } = new();
+        public string PetName { get; set; } = "";
+        public bool SoundEnabled { get; set; } = true;
+        public bool HasCompletedSetup { get; set; } = false;
+        public Dictionary<string, int> DecorationColors { get; set; } = new();
     }
 
     /// <summary>
