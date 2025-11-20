@@ -1,68 +1,114 @@
 # Amicus - Desktop Pet Cat
 
-A desktop companion that lives on your screen. Amicus is a retro-style pixel art cat that keeps you company on your Windows desktop.
+A cozy desktop companion that lives on your screen. Amicus is a retro-style pixel art cat that keeps you company, reminds you to drink water and exercise, and brings a touch of joy to your Windows desktop.
 
-![Phase](https://img.shields.io/badge/Phase-2%20Complete-brightgreen)
 ![Framework](https://img.shields.io/badge/.NET-9.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-blue)
-![Status](https://img.shields.io/badge/Status-Active%20Development-yellow)
+![Status](https://img.shields.io/badge/Status-Complete-brightgreen)
+
+## Features
+
+### Pet Behavior
+- Wanders around your desktop with smooth animations
+- Multiple states: Idle, Walking, Running, Happy, Chasing, Attacking, Sleeping
+- Needs system (hunger, cleanliness, happiness) that degrade over time
+- Click to pet and increase happiness
+- Mouse chasing behavior with attack animations
+
+### Pet's House
+- Cozy room with customizable decorations
+- Food bowl to feed your cat
+- Interactive brush for grooming
+- Poop system with scoop and garbage disposal
+- Lock/unlock pet in room
+
+### Reminder System
+- Water reminders every 1.5 hours
+- Exercise reminders every hour
+- Custom reminders via table click
+- Cute cat-style messages
+- Click to dismiss
+
+### First Startup Setup
+- Name your cat
+- Customize decoration colors
+- Toggle reminders on/off
+
+### Persistence
+- Auto-saves on exit and shutdown
+- Remembers pet state, needs, and position
+- Tracks time away for realistic need degradation
 
 ## Requirements
 
--   Windows 10/11
--   .NET 9.0 SDK
+- Windows 10/11 (64-bit)
+- .NET 9.0 Runtime (included in installer)
 
-## Quick Start
+## Installation
 
-1. **Clone the repository**
+### Using Installer
+1. Download the latest `Setup_AMICUS_vX.X.X.exe` from releases
+2. Run the installer
+3. Choose installation options (desktop shortcut, startup)
+4. Launch Amicus
 
-    ```bash
-    git clone <repository-url>
-    cd Amicus
-    ```
+### Building from Source
+1. Clone the repository
+   ```bash
+   git clone <repository-url>
+   cd Amicus
+   ```
 
-2. **Build and run**
+2. Build and run
+   ```bash
+   dotnet run
+   ```
 
-    ```bash
-    dotnet run
-    ```
+3. For release build
+   ```bash
+   dotnet publish -c Release -r win-x64 --self-contained true
+   ```
 
-3. **Exit the app**
-    - Right-click the system tray icon → Exit
-    - Or open the house panel → Exit Application button
+## Usage
+
+- **Drag pet**: Click and drag the cat around your desktop
+- **Pet the cat**: Click on the cat to increase happiness
+- **Open house**: Click the house button (bottom-right)
+- **Feed**: Click food bowl in house
+- **Groom**: Pick up brush and drag over cat
+- **Custom reminder**: Click table in house
+- **Exit**: Right-click system tray icon or click left window in house
 
 ## Project Structure
 
 ```
 Amicus/
-├── Core/              # Pet logic and controllers (Phase 2)
-├── UI/                # Additional UI components
-├── Animation/         # Animation system (Phase 2)
-├── Data/              # Save system and reminders (Phase 2+)
+├── Animation/         # AnimationController, SpriteManager, PetState
+├── Data/              # SaveManager, SaveData models
+├── UI/                # DecorationManager, RoomManager
 ├── Resources/
-│   └── Sprites/       # Pet sprite sheets
-├── MainWindow.xaml    # Main UI
-└── MainWindow.xaml.cs # Application logic
+│   ├── Sprites/       # Pet and room sprite sheets
+│   ├── Icon/          # Application icon
+│   └── elements/      # UI elements (message bubbles)
+├── MainWindow.xaml    # Main game UI
+├── SetupWindow.xaml   # First startup setup
+└── CustomReminderWindow.xaml  # Custom reminder dialog
 ```
 
 ## Technology Stack
 
--   **Framework**: WPF (Windows Presentation Foundation)
--   **.NET Version**: 9.0
--   **Language**: C#
--   **Graphics**: Pixel art sprites with NearestNeighbor scaling
--   **Logging**: Microsoft.Extensions.Logging (console output)
-
-## Development Status
-
-| Phase                 | Status      | Features                                                      |
-| --------------------- | ----------- | ------------------------------------------------------------- |
-| Phase 1: Foundation   | ✅ Complete | Transparent window, dragging, house panel, basic interactions |
-| Phase 2: Pet Behavior | ✅ Complete | Animations, wandering, needs degradation, sprite flipping     |
-| Phase 3: Interactions | 📋 Planned  | Mouse chasing, advanced interactions                          |
-| Phase 4: Polish       | 📋 Planned  | Notifications, settings, sounds                               |
+- **Framework**: WPF (Windows Presentation Foundation)
+- **.NET Version**: 9.0
+- **Language**: C#
+- **Graphics**: Pixel art sprites with NearestNeighbor scaling
+- **Persistence**: JSON save files
+- **Installer**: Inno Setup
 
 ## Credits
 
--   Sprite pack: Retro Cats (ToffeeCraft)
--   Framework: WPF / .NET 9.0
+- Sprite pack: Retro Cats (ToffeeCraft)
+- Framework: WPF / .NET 9.0
+
+## License
+
+Private project - All rights reserved

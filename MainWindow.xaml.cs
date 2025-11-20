@@ -223,6 +223,52 @@ namespace AMICUS
         private Dictionary<string, int> _decorationColors = new Dictionary<string, int>();
         private bool _hasCompletedSetup = false;
 
+        // Reminder system
+        private bool _remindersEnabled = true;
+        private DateTime _lastWaterReminder = DateTime.MinValue;
+        private DateTime _lastExerciseReminder = DateTime.MinValue;
+        private List<Amicus.Data.CustomReminderData> _customReminders = new List<Amicus.Data.CustomReminderData>();
+        private double _waterReminderTimer = 0;
+        private double _exerciseReminderTimer = 0;
+        private bool _isReminderVisible = false;
+
+#if DEBUG
+        private const double WATER_REMINDER_INTERVAL = 180.0;    // 3 minutes for testing
+        private const double EXERCISE_REMINDER_INTERVAL = 120.0;  // 2 minutes for testing
+#else
+        private const double WATER_REMINDER_INTERVAL = 5400.0;   // 1.5 hours (90 minutes)
+        private const double EXERCISE_REMINDER_INTERVAL = 3600.0; // 1 hour
+#endif
+
+        // Reminder messages (cute cat style)
+        private static readonly string[] WaterReminderMessages = new[]
+        {
+            "Meow! Time to hydrate, human!",
+            "*taps water bowl* Hint, hint...",
+            "Even I drink water... just saying.",
+            "Your water bowl is looking lonely!",
+            "Hydration check! *stares intensely*",
+            "Did you forget to drink water again?",
+            "*judges silently* Water. Now.",
+            "I'd fetch you water but... paws.",
+            "Meow-ster says: DRINK WATER!",
+            "Your fur will get dry! Oh wait..."
+        };
+
+        private static readonly string[] ExerciseReminderMessages = new[]
+        {
+            "*stretches dramatically* Take notes!",
+            "Time to move! I'll supervise from here.",
+            "Stand up! Touch your toes! I'll watch.",
+            "Even cats need to stretch sometimes!",
+            "Movement break! *does a zoomie*",
+            "*yawns* Wake up those muscles!",
+            "Your human zoomies are due!",
+            "Sitting too long? That's my job!",
+            "Get up! The floor needs inspecting!",
+            "*judges your posture* Unacceptable."
+        };
+
         public MainWindow()
         {
             InitializeComponent();
@@ -327,10 +373,11 @@ namespace AMICUS
                         // Apply user choices
                         _petName = setupWindow.PetName;
                         _decorationColors = setupWindow.DecorationColors;
+                        _remindersEnabled = setupWindow.RemindersEnabled;
                         _hasCompletedSetup = true;
 
-                        App.Logger.LogInformation("Setup completed. Pet name: {Name}, Decoration colors: {Count}",
-                            _petName, _decorationColors.Count);
+                        App.Logger.LogInformation("Setup completed. Pet name: {Name}, Decoration colors: {Count}, Reminders: {Reminders}",
+                            _petName, _decorationColors.Count, _remindersEnabled);
 
                         // Save initial setup immediately
                         SaveInitialSetup();
@@ -426,6 +473,9 @@ namespace AMICUS
                 messageBubbleImage.CacheOption = BitmapCacheOption.OnLoad;
                 messageBubbleImage.EndInit();
                 MessageBubbleImage.Source = messageBubbleImage;
+
+                // Load reminder bubble background (same image)
+                ReminderBubbleImage.Source = messageBubbleImage;
 
                 // Load exit message bubble background (left window)
                 var exitMessageBubbleImage = new BitmapImage();
@@ -885,6 +935,13 @@ namespace AMICUS
                         image.MouseLeftButtonDown += LeftWindow_MouseLeftButtonDown;
                         image.Cursor = System.Windows.Input.Cursors.Hand;
                         _leftWindowImage = image;
+                    }
+
+                    // Make table clickable (custom reminders)
+                    if (placed.DecorationName == "table")
+                    {
+                        image.MouseLeftButtonDown += Table_MouseLeftButtonDown;
+                        image.Cursor = System.Windows.Input.Cursors.Hand;
                     }
 
                     // Add to canvas
@@ -2123,7 +2180,7 @@ namespace AMICUS
                 double distanceToMouse = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
 
                 // Handle proximity timer and chase triggering
-                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive && !_isBrushingPet)
+                if (distanceToMouse < DETECTION_RADIUS && !_isChasing && !_chaseCooldownActive && !_isBrushingPet && !_isReminderVisible)
                 {
                     // Mouse is within detection radius - increment proximity timer
                     _proximityTimer += deltaTime;
@@ -2392,8 +2449,8 @@ namespace AMICUS
                     }
                 }
             }
-            // Don't update wandering behavior if pet is being dragged, performing action, chasing, or walking to house
-            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing && !_isWalkingToHouse)
+            // Don't update wandering behavior if pet is being dragged, performing action, chasing, walking to house, or showing reminder
+            else if (!_isDraggingPet && !_isPerformingAction && !_isChasing && !_isWalkingToHouse && !_isReminderVisible)
             {
                 // Update wandering behavior timers
                 _wanderTimer += deltaTime;
@@ -2601,6 +2658,9 @@ namespace AMICUS
                     App.Logger.LogInformation("Cat is hungry and food bowl is full. Walking to house to eat.");
                 }
             }
+
+            // Check and show reminders
+            CheckReminders(deltaTime);
             }
             catch (Exception ex)
             {
@@ -2608,6 +2668,177 @@ namespace AMICUS
                 App.Logger.LogError(ex, "Error in game loop - timer stopped");
             }
         }
+
+        #region Reminders
+
+        /// <summary>
+        /// Shows a reminder bubble with the given message
+        /// </summary>
+        private void ShowReminderBubble(string message)
+        {
+            if (_isReminderVisible) return; // Don't show multiple reminders at once
+
+            // Force pet to idle state and stop movement
+            _animationController.ChangeState(PetState.Idle);
+            _petVelocityX = 0;
+            _petVelocityY = 0;
+
+            // Cancel any ongoing behaviors
+            _isChasing = false;
+            _isAttacking = false;
+            _isPerformingAction = false;
+            _isWalkingToHouse = false;
+
+            ReminderText.Text = message;
+            PositionReminderBubble();
+            ReminderBubbleCanvas.Visibility = Visibility.Visible;
+            _isReminderVisible = true;
+
+            App.Logger.LogInformation("Showing reminder: {Message}", message);
+        }
+
+        /// <summary>
+        /// Positions the reminder bubble relative to pet, adjusting for screen edges
+        /// </summary>
+        private void PositionReminderBubble()
+        {
+            // Force layout update to get actual height with dynamic content
+            ReminderBubble.Measure(new System.Windows.Size(280, double.PositiveInfinity));
+            ReminderBubble.Arrange(new System.Windows.Rect(ReminderBubble.DesiredSize));
+
+            double bubbleWidth = 280; // Fixed width
+            double bubbleHeight = ReminderBubble.DesiredSize.Height;
+
+            // Default: position above pet, offset 20px left and 30px lower (closer to pet)
+            double bubbleX = _petX + (PetImage.ActualWidth / 2) - (bubbleWidth / 2) + 10;
+            double bubbleY = _petY - bubbleHeight + 20; // 20px overlap with pet area
+
+            // Adjust for left edge
+            if (bubbleX < 10)
+            {
+                bubbleX = 10;
+            }
+
+            // Adjust for right edge
+            if (bubbleX + bubbleWidth > MainCanvas.ActualWidth - 10)
+            {
+                bubbleX = MainCanvas.ActualWidth - bubbleWidth - 10;
+            }
+
+            // Adjust for top edge - put below pet instead
+            if (bubbleY < 10)
+            {
+                bubbleY = _petY + PetImage.ActualHeight + 10; // 10px gap below pet
+            }
+
+            // Adjust for bottom edge
+            if (bubbleY + bubbleHeight > MainCanvas.ActualHeight - 10)
+            {
+                bubbleY = MainCanvas.ActualHeight - bubbleHeight - 10;
+            }
+
+            Canvas.SetLeft(ReminderBubble, bubbleX);
+            Canvas.SetTop(ReminderBubble, bubbleY);
+        }
+
+        /// <summary>
+        /// Handles click on reminder bubble to dismiss it
+        /// </summary>
+        private void ReminderBubble_Click(object sender, MouseButtonEventArgs e)
+        {
+            ReminderBubbleCanvas.Visibility = Visibility.Collapsed;
+            _isReminderVisible = false;
+            e.Handled = true;
+            App.Logger.LogInformation("Reminder dismissed by user");
+        }
+
+        /// <summary>
+        /// Shows a random water reminder message
+        /// </summary>
+        private void ShowWaterReminder()
+        {
+            int index = _random.Next(WaterReminderMessages.Length);
+            ShowReminderBubble(WaterReminderMessages[index]);
+            _lastWaterReminder = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Shows a random exercise reminder message
+        /// </summary>
+        private void ShowExerciseReminder()
+        {
+            int index = _random.Next(ExerciseReminderMessages.Length);
+            ShowReminderBubble(ExerciseReminderMessages[index]);
+            _lastExerciseReminder = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Checks and triggers reminders based on timers
+        /// </summary>
+        private void CheckReminders(double deltaTime)
+        {
+            if (!_remindersEnabled || _isPetInRoom || _isReminderVisible) return;
+
+            // Water reminder timer
+            _waterReminderTimer += deltaTime;
+            if (_waterReminderTimer >= WATER_REMINDER_INTERVAL)
+            {
+                ShowWaterReminder();
+                _waterReminderTimer = 0;
+            }
+
+            // Exercise reminder timer
+            _exerciseReminderTimer += deltaTime;
+            if (_exerciseReminderTimer >= EXERCISE_REMINDER_INTERVAL)
+            {
+                ShowExerciseReminder();
+                _exerciseReminderTimer = 0;
+            }
+
+            // Check custom reminders
+            var now = DateTime.Now;
+            foreach (var reminder in _customReminders)
+            {
+                if (!reminder.HasBeenDisplayed && reminder.ScheduledTime <= now)
+                {
+                    // Check if reminder was missed (more than 1 minute late)
+                    bool wasMissed = (now - reminder.ScheduledTime).TotalMinutes > 1;
+                    string message = wasMissed ? $"MISSED: {reminder.Message}" : reminder.Message;
+                    ShowReminderBubble(message);
+                    reminder.HasBeenDisplayed = true;
+                    break; // Only show one at a time
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles table click to create custom reminder
+        /// </summary>
+        private void Table_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var reminderDialog = new CustomReminderWindow();
+            reminderDialog.Owner = this;
+
+            if (reminderDialog.ShowDialog() == true)
+            {
+                var reminder = new Amicus.Data.CustomReminderData
+                {
+                    Message = reminderDialog.ReminderMessage,
+                    ScheduledTime = reminderDialog.ScheduledTime,
+                    HasBeenDisplayed = false
+                };
+
+                _customReminders.Add(reminder);
+                SaveGameState();
+
+                App.Logger.LogInformation("Custom reminder created: {Message} at {Time}",
+                    reminder.Message, reminder.ScheduledTime);
+            }
+
+            e.Handled = true;
+        }
+
+        #endregion
 
         #region Persistence
 
@@ -2638,7 +2869,8 @@ namespace AMICUS
                         SoundEnabled = true,
                         PetName = _petName,
                         HasCompletedSetup = _hasCompletedSetup,
-                        DecorationColors = _decorationColors
+                        DecorationColors = _decorationColors,
+                        RemindersEnabled = _remindersEnabled
                     },
                     RoomState = new Amicus.Data.RoomStateData
                     {
@@ -2653,6 +2885,12 @@ namespace AMICUS
                     Session = new Amicus.Data.SessionData
                     {
                         LastExitTime = DateTime.UtcNow
+                    },
+                    Reminders = new Amicus.Data.ReminderData
+                    {
+                        LastWaterReminder = _lastWaterReminder,
+                        LastExerciseReminder = _lastExerciseReminder,
+                        CustomReminders = _customReminders
                     }
                 };
 
@@ -2717,7 +2955,8 @@ namespace AMICUS
                         SoundEnabled = true,
                         PetName = _petName,
                         HasCompletedSetup = true,
-                        DecorationColors = _decorationColors
+                        DecorationColors = _decorationColors,
+                        RemindersEnabled = _remindersEnabled
                     },
                     RoomState = new Amicus.Data.RoomStateData
                     {
@@ -2727,6 +2966,12 @@ namespace AMICUS
                     Session = new Amicus.Data.SessionData
                     {
                         LastExitTime = DateTime.UtcNow
+                    },
+                    Reminders = new Amicus.Data.ReminderData
+                    {
+                        LastWaterReminder = DateTime.UtcNow,
+                        LastExerciseReminder = DateTime.UtcNow,
+                        CustomReminders = new List<Amicus.Data.CustomReminderData>()
                     }
                 };
 
@@ -2783,6 +3028,18 @@ namespace AMICUS
                 _petName = string.IsNullOrEmpty(saveData.UserSettings.PetName) ? "Kitty" : saveData.UserSettings.PetName;
                 _hasCompletedSetup = saveData.UserSettings.HasCompletedSetup;
                 _decorationColors = saveData.UserSettings.DecorationColors ?? new Dictionary<string, int>();
+                _remindersEnabled = saveData.UserSettings.RemindersEnabled;
+
+                // Restore reminder data
+                if (saveData.Reminders != null)
+                {
+                    _lastWaterReminder = saveData.Reminders.LastWaterReminder;
+                    _lastExerciseReminder = saveData.Reminders.LastExerciseReminder;
+                    _customReminders = saveData.Reminders.CustomReminders ?? new List<Amicus.Data.CustomReminderData>();
+
+                    // Timers start from 0 each session - reminders are timed from app launch
+                    // _waterReminderTimer and _exerciseReminderTimer are already 0
+                }
 
                 // Save poop data for restoration after images load
                 bool hadPoopsOnExit = saveData.RoomState.PoopPositions != null && saveData.RoomState.PoopPositions.Count > 0;

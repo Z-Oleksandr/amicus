@@ -272,22 +272,70 @@
 -   `Data/SaveData.cs` - Added user settings fields
 -   `MainWindow.xaml.cs` - Startup flow, LoadRoom colors, save/load methods
 
+**Work Session (2025-11-20 Part 2) - Reminder System:**
+
+✅ **Reminder System - COMPLETE**
+
+**Setup Integration:**
+
+-   Checkbox "Give reminders" in SetupWindow
+-   RemindersEnabled field in UserSettingsData
+-   Persisted with other user settings
+
+**Water Reminders:**
+
+-   Interval: 1.5 hours (3 minutes in debug)
+-   10 cute cat-style messages (funny/sarcastic)
+-   Random message selection each time
+-   Examples: "Meow! Time to hydrate, human!", "*judges silently* Water. Now."
+
+**Exercise Reminders:**
+
+-   Interval: 1 hour (2 minutes in debug)
+-   10 cute cat-style messages
+-   Random message selection each time
+-   Examples: "*stretches dramatically* Take notes!", "Your human zoomies are due!"
+
+**Custom Reminders:**
+
+-   Table click in house opens CustomReminderWindow
+-   Message input (max 150 characters with counter)
+-   DatePicker and 24h time input (HH:MM)
+-   Validation: non-empty message, valid time, must be in future
+-   Save button disabled until all validation passes
+-   "MISSED:" prefix for reminders that triggered while app was closed
+
+**Visual Display:**
+
+-   Uses `message_bubble.png` as background
+-   Click-to-dismiss functionality
+-   Smart positioning: above pet by default
+-   Edge detection pushes bubble away from screen edges
+-   Only displays when pet is outside room
+
+**Persistence:**
+
+-   New ReminderData class with water/exercise timestamps
+-   CustomReminderData list with message, scheduled time, displayed flag
+-   Timer initialization from elapsed time on app start
+-   Missed reminders checked and displayed on startup
+
+**Files Created:**
+
+-   `CustomReminderWindow.xaml` - Custom reminder dialog UI
+-   `CustomReminderWindow.xaml.cs` - Custom reminder dialog logic
+
+**Files Modified:**
+
+-   `Data/SaveData.cs` - Added ReminderData, CustomReminderData classes
+-   `SetupWindow.xaml` - Added "Give reminders" checkbox
+-   `SetupWindow.xaml.cs` - Added RemindersEnabled property
+-   `MainWindow.xaml` - Added ReminderBubbleCanvas
+-   `MainWindow.xaml.cs` - Reminder timer logic, messages, table click handler
+
 ---
 
 ## Future Enhancements
-
-⏳ **Reminder System:**
-
-    - The pet should sometimes give friendly reminders to the user.
-    - In the SetupWindow there should be a checkbox, which will say "Give reminders" => if checked the cat will do reminders functionality, if not, the cat won't.
-    - Visually the reminders should use `Resources\elements\control\message_bubble.png` as background and display text on that. If the cat is at the top of the screen or if too close to one of the sides, so that the reminder doesn't fit onto the screen, it should be pushed away from the edge of the screen until it fits.
-    - To dismiss the reminder, the user should just click on the message bubble.
-
-    -   Drink water reminders: the drink water reminders should come once every 1,5 hours (for development make it once every 3 minutes). Claude should create several messages in a "cute cat style" (some funny, some a bit sarcastic) which would remind the user to drink some water. Every time it is time to give water reminder a random one should be chosen.
-
-    -   Exercise reminders: exercise reminder should come once every hour and for the rest it should follow the template of the water reminder.
-
-    -   Custom user reminders: to create a custom reminder, the user should click on the table in the cat's house. When clicked a window (similar to setupwindow) should pop up. In this window the user can enter a reminder message (limit a reasonable amount of characters, make the message bubble adjust it's size based on the amount of characters), enter a date and time at which the cat should display the reminder. App should use system time for this. If the cat was off while the reminder was supposed to come the cat should display the reminder at next start up and put "MISSED" at the beginning of the text.
 
 ⏳ **Settings Menu:**
 

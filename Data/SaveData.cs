@@ -12,6 +12,7 @@ namespace Amicus.Data
         public UserSettingsData UserSettings { get; set; } = new();
         public RoomStateData RoomState { get; set; } = new();
         public SessionData Session { get; set; } = new();
+        public ReminderData Reminders { get; set; } = new();
     }
 
     /// <summary>
@@ -40,6 +41,7 @@ namespace Amicus.Data
         public bool SoundEnabled { get; set; } = true;
         public bool HasCompletedSetup { get; set; } = false;
         public Dictionary<string, int> DecorationColors { get; set; } = new();
+        public bool RemindersEnabled { get; set; } = true;
     }
 
     /// <summary>
@@ -67,5 +69,25 @@ namespace Amicus.Data
     public class SessionData
     {
         public DateTime LastExitTime { get; set; } = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Reminder system data
+    /// </summary>
+    public class ReminderData
+    {
+        public DateTime LastWaterReminder { get; set; } = DateTime.MinValue;
+        public DateTime LastExerciseReminder { get; set; } = DateTime.MinValue;
+        public List<CustomReminderData> CustomReminders { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Individual custom reminder data
+    /// </summary>
+    public class CustomReminderData
+    {
+        public string Message { get; set; } = "";
+        public DateTime ScheduledTime { get; set; }
+        public bool HasBeenDisplayed { get; set; } = false;
     }
 }
