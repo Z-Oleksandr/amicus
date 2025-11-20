@@ -6,7 +6,7 @@
         mc:Ignorable="d"
         Title="Welcome to AMICUS"
         Width="500"
-        Height="620"
+        Height="640"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         WindowStyle="None"
@@ -82,6 +82,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
@@ -110,7 +111,7 @@
             </StackPanel>
 
             <!-- Pet Name Section -->
-            <StackPanel Grid.Row="1" Margin="0,0,0,20">
+            <StackPanel Grid.Row="1" Margin="0,0,0,15">
                 <TextBlock Text="Name your cat:"
                            FontSize="14"
                            FontWeight="SemiBold"
@@ -122,8 +123,24 @@
                          TextChanged="PetNameTextBox_TextChanged"/>
             </StackPanel>
 
+            <!-- Reminders Checkbox -->
+            <StackPanel Grid.Row="2" Margin="0,0,0,15">
+                <CheckBox x:Name="RemindersCheckBox"
+                          IsChecked="True"
+                          Cursor="Hand">
+                    <TextBlock Text="Give reminders"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#5D4037"/>
+                </CheckBox>
+                <TextBlock Text="Cat will remind you to drink water and exercise"
+                           FontSize="11"
+                           Foreground="#8D6E63"
+                           Margin="20,3,0,0"/>
+            </StackPanel>
+
             <!-- House Preview Section -->
-            <StackPanel Grid.Row="2">
+            <StackPanel Grid.Row="3">
                 <TextBlock Text="Customize your house:"
                            FontSize="14"
                            FontWeight="SemiBold"
@@ -158,7 +175,7 @@
 
             <!-- Save Button -->
             <Button x:Name="SaveButton"
-                    Grid.Row="3"
+                    Grid.Row="4"
                     Content="Let's Go!"
                     Style="{StaticResource CozyButton}"
                     Width="150"

@@ -384,5 +384,27 @@
                    MouseMove="PetImage_MouseMove"
                    Cursor="Hand"/>
         </Canvas>
+
+        <!-- Reminder Bubble (on top of pet, click to dismiss) -->
+        <Canvas x:Name="ReminderBubbleCanvas"
+                Visibility="Collapsed"
+                MouseLeftButtonDown="ReminderBubble_Click">
+            <Grid x:Name="ReminderBubble"
+                  Width="280"
+				  MaxHeight="169">
+                <Image x:Name="ReminderBubbleImage"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       Stretch="Fill"/>
+                <TextBlock x:Name="ReminderText"
+                           TextWrapping="Wrap"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Foreground="Black"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Center"
+                           TextAlignment="Center"
+                           Margin="60,20,60,20"/>
+            </Grid>
+        </Canvas>
     </Grid>
 </Window>

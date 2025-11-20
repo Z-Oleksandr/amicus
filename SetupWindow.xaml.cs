@@ -18,6 +18,7 @@ namespace AMICUS
         // Public properties for results
         public string PetName { get; private set; } = "";
         public Dictionary<string, int> DecorationColors { get; private set; } = new();
+        public bool RemindersEnabled { get; private set; } = true;
 
         // Decoration data
         private readonly Dictionary<string, DecorationData> _decorations = new();
@@ -224,6 +225,7 @@ namespace AMICUS
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             PetName = PetNameTextBox.Text.Trim();
+            RemindersEnabled = RemindersCheckBox.IsChecked ?? true;
             DialogResult = true;
             Close();
         }
