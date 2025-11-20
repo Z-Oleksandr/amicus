@@ -1,0 +1,171 @@
+<Window x:Class="AMICUS.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Welcome to AMICUS"
+        Width="500"
+        Height="620"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <!-- Cozy Button Style -->
+        <Style x:Key="CozyButton" TargetType="Button">
+            <Setter Property="Background" Value="#FF8B6B"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="20,10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#FFA080"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#CCCCCC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- TextBox Style -->
+        <Style x:Key="CozyTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#DDD"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="2"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Main Container with rounded corners and shadow -->
+    <Border Background="#FFF8F0"
+            CornerRadius="16"
+            Margin="10">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.3"/>
+        </Border.Effect>
+
+        <Grid Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
+                <TextBlock Text="Welcome to AMICUS!"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           Foreground="#5D4037"
+                           HorizontalAlignment="Center">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="#00000000" BlurRadius="0" ShadowDepth="0"/>
+                    </TextBlock.Effect>
+                </TextBlock>
+                <TextBlock Text="Amicus is your digital pet cat."
+                           FontSize="14"
+                           Foreground="#8D6E63"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"/>
+				<TextBlock Text="Here you can customize the hosue and your pet."
+                           FontSize="14"
+                           Foreground="#8D6E63"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+
+            <!-- Pet Name Section -->
+            <StackPanel Grid.Row="1" Margin="0,0,0,20">
+                <TextBlock Text="Name your cat:"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="#5D4037"
+                           Margin="0,0,0,8"/>
+                <TextBox x:Name="PetNameTextBox"
+                         Style="{StaticResource CozyTextBox}"
+                         MaxLength="20"
+                         TextChanged="PetNameTextBox_TextChanged"/>
+            </StackPanel>
+
+            <!-- House Preview Section -->
+            <StackPanel Grid.Row="2">
+                <TextBlock Text="Customize your house:"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="#5D4037"
+                           Margin="0,0,0,5"/>
+                <TextBlock Text="Click decorations to change their colors!"
+                           FontSize="11"
+                           Foreground="#8D6E63"
+                           Margin="0,0,0,10"/>
+
+                <!-- Room Preview Container -->
+                <Border Background="#E8DCD0"
+                        CornerRadius="8"
+                        Padding="10"
+                        HorizontalAlignment="Center">
+                    <Grid Width="232" Height="212">
+                        <!-- Room Background -->
+                        <Image x:Name="PreviewRoomImage"
+                               Width="232"
+                               Height="232"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"
+                               Stretch="Uniform"/>
+
+                        <!-- Decorations Canvas -->
+                        <Canvas x:Name="PreviewDecorationsCanvas"
+                                Width="232"
+                                Height="232"
+                                Background="Transparent"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- Save Button -->
+            <Button x:Name="SaveButton"
+                    Grid.Row="3"
+                    Content="Let's Go!"
+                    Style="{StaticResource CozyButton}"
+                    Width="150"
+                    Height="45"
+                    Margin="0,20,0,0"
+                    Click="SaveButton_Click"
+                    IsEnabled="False"/>
+        </Grid>
+    </Border>
+</Window>

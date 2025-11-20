@@ -218,9 +218,18 @@ namespace AMICUS
         private const double WALK_TO_HOUSE_TIMEOUT = 30.0; // Give up after 30 seconds
         private const double WALK_TO_HOUSE_SPEED = 100.0; // Faster walking when hungry
 
+        // User settings (from first startup setup)
+        private string _petName = "Kitty";
+        private Dictionary<string, int> _decorationColors = new Dictionary<string, int>();
+        private bool _hasCompletedSetup = false;
+
         public MainWindow()
         {
             InitializeComponent();
+
+            // Handle window closing to save game state
+            this.Closing += Window_Closing;
+
             SetupSystemTray();
 
             // Initialize animation system
@@ -242,7 +251,25 @@ namespace AMICUS
         private void SetupSystemTray()
         {
             _notifyIcon = new WinForms.NotifyIcon();
-            _notifyIcon.Icon = SystemIcons.Application; // Default icon for now
+
+            // Load custom icon from resources
+            try
+            {
+                var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Icon", "Icon1.ico");
+                if (System.IO.File.Exists(iconPath))
+                {
+                    _notifyIcon.Icon = new System.Drawing.Icon(iconPath);
+                }
+                else
+                {
+                    _notifyIcon.Icon = SystemIcons.Application;
+                }
+            }
+            catch
+            {
+                _notifyIcon.Icon = SystemIcons.Application;
+            }
+
             _notifyIcon.Text = "Amicus - Desktop Pet";
             _notifyIcon.Visible = true;
 
@@ -286,8 +313,44 @@ namespace AMICUS
             {
                 App.Logger.LogInformation("Window loaded, initializing pet...");
 
-                // Load saved game state first (before setting defaults)
-                LoadGameState();
+                // Check for first startup (no save file or setup not completed)
+                var saveData = Amicus.Data.SaveManager.LoadGame();
+                if (saveData == null || !saveData.UserSettings.HasCompletedSetup)
+                {
+                    App.Logger.LogInformation("First startup detected, showing setup window...");
+
+                    var setupWindow = new SetupWindow();
+                    setupWindow.Owner = this;
+
+                    if (setupWindow.ShowDialog() == true)
+                    {
+                        // Apply user choices
+                        _petName = setupWindow.PetName;
+                        _decorationColors = setupWindow.DecorationColors;
+                        _hasCompletedSetup = true;
+
+                        App.Logger.LogInformation("Setup completed. Pet name: {Name}, Decoration colors: {Count}",
+                            _petName, _decorationColors.Count);
+
+                        // Save initial setup immediately
+                        SaveInitialSetup();
+                    }
+                    else
+                    {
+                        // User cancelled - use defaults
+                        _petName = "Kitty";
+                        _decorationColors = new Dictionary<string, int>();
+                        _hasCompletedSetup = true;
+
+                        App.Logger.LogInformation("Setup cancelled, using defaults");
+                        SaveInitialSetup();
+                    }
+                }
+                else
+                {
+                    // Normal load - restore saved game state
+                    LoadGameState();
+                }
 
                 // Set initial pet position (will be overridden if save data exists)
                 UpdatePetPosition(_petX, _petY);
@@ -375,17 +438,21 @@ namespace AMICUS
                 // Load all decorations
                 _decorationManager.LoadAllDecorations();
 
-                // Place decorations - positioning iteratively
-                _decorationManager.PlaceDecoration("bed", 0, 12, 117, 0.5);
-                _decorationManager.PlaceDecoration("foodbowl_empty", 0, 127, 150, 0.69);
+                // Helper to get user-selected variant or default to 0
+                int GetVariant(string name) =>
+                    _decorationColors.TryGetValue(name, out int v) ? v : 0;
+
+                // Place decorations - positioning iteratively with user-selected colors
+                _decorationManager.PlaceDecoration("bed", GetVariant("bed"), 12, 117, 0.5);
+                _decorationManager.PlaceDecoration("foodbowl_empty", 0, 127, 150, 0.69); // Food bowl manages own state
                 _decorationManager.PlaceDecoration("climber1", 0, 90, 19, 0.59);
-                _decorationManager.PlaceDecoration("window_right", 0, 160, 47, 0.59);
-                _decorationManager.PlaceDecoration("window_left", 0, 40, 33, 0.59);
-                _decorationManager.PlaceDecoration("table", 0, 175, 115, 0.69);
+                _decorationManager.PlaceDecoration("window_right", GetVariant("window_right"), 160, 47, 0.59);
+                _decorationManager.PlaceDecoration("window_left", GetVariant("window_left"), 40, 33, 0.59);
+                _decorationManager.PlaceDecoration("table", GetVariant("table"), 175, 115, 0.69);
                 _decorationManager.PlaceDecoration("picture2", 0, 10, 80, 1);
                 _decorationManager.PlaceDecoration("picture1", 0, 198, 75, 0.69);
                 _decorationManager.PlaceDecoration("mouse", 0, 80, 105, 0.49);
-                _decorationManager.PlaceDecoration("plant_small", 0, 185, 110, 0.69);
+                _decorationManager.PlaceDecoration("plant_small", GetVariant("plant_small"), 185, 110, 0.69);
                 _decorationManager.PlaceDecoration("toy_fish", 0, 120, 110, 0.49);
 
                 // Render decorations on the canvas
@@ -983,6 +1050,10 @@ namespace AMICUS
                     _animationController.ChangeState(PetState.Playing);
                     _isPerformingAction = true;
                     _actionTimer = 0;
+
+                    // Clear velocity to prevent sliding after release
+                    _petVelocityX = 0;
+                    _petVelocityY = 0;
                 }
 
                 App.Logger.LogInformation("Pet petted! Happiness increased.");
@@ -2120,7 +2191,7 @@ namespace AMICUS
                     _isPerformingAction = false;
                     _actionTimer = 0;
 
-                    // Return to idle or random state after action
+                    // Return to idle or walking state after action (50/50)
                     var randomValue = _random.NextDouble();
                     if (randomValue < 0.5)
                     {
@@ -2128,13 +2199,6 @@ namespace AMICUS
                         _petVelocityX = 0;
                         _petVelocityY = 0;
                         App.Logger.LogDebug("Action completed → Idle (velocity cleared)");
-                    }
-                    else if (randomValue < 0.75)
-                    {
-                        _animationController.ChangeState(PetState.Playing);
-                        _petVelocityX = 0;
-                        _petVelocityY = 0;
-                        App.Logger.LogDebug("Action completed → Playing (velocity cleared)");
                     }
                     else
                     {
@@ -2571,8 +2635,10 @@ namespace AMICUS
                     UserSettings = new Amicus.Data.UserSettingsData
                     {
                         HouseLocked = _isRoomLocked,
-                        SoundEnabled = true, // Future feature
-                        PetName = "Cat" // Future feature
+                        SoundEnabled = true,
+                        PetName = _petName,
+                        HasCompletedSetup = _hasCompletedSetup,
+                        DecorationColors = _decorationColors
                     },
                     RoomState = new Amicus.Data.RoomStateData
                     {
@@ -2603,6 +2669,80 @@ namespace AMICUS
             catch (Exception ex)
             {
                 App.Logger.LogError(ex, "Error saving game state");
+            }
+        }
+
+        /// <summary>
+        /// Public method to save game state - called during Windows shutdown
+        /// </summary>
+        public void SaveGameStateOnShutdown()
+        {
+            App.Logger.LogInformation("SaveGameStateOnShutdown called");
+            SaveGameState();
+        }
+
+        /// <summary>
+        /// Event handler for Window.Closing - saves game state when window is closed
+        /// </summary>
+        private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            App.Logger.LogInformation("Window closing - saving game state");
+            SaveGameState();
+        }
+
+        /// <summary>
+        /// Saves the initial setup data after first-time configuration
+        /// </summary>
+        private void SaveInitialSetup()
+        {
+            try
+            {
+                App.Logger.LogInformation("Saving initial setup...");
+
+                var saveData = new Amicus.Data.SaveData
+                {
+                    PetState = new Amicus.Data.PetStateData
+                    {
+                        PositionX = _petX,
+                        PositionY = _petY,
+                        CurrentState = "Idle",
+                        IsInRoom = false,
+                        Hunger = 100.0,
+                        Cleanliness = 100.0,
+                        Happiness = 100.0
+                    },
+                    UserSettings = new Amicus.Data.UserSettingsData
+                    {
+                        HouseLocked = false,
+                        SoundEnabled = true,
+                        PetName = _petName,
+                        HasCompletedSetup = true,
+                        DecorationColors = _decorationColors
+                    },
+                    RoomState = new Amicus.Data.RoomStateData
+                    {
+                        FoodBowlFull = false,
+                        PoopPositions = new List<Amicus.Data.PoopPositionData>()
+                    },
+                    Session = new Amicus.Data.SessionData
+                    {
+                        LastExitTime = DateTime.UtcNow
+                    }
+                };
+
+                bool success = Amicus.Data.SaveManager.SaveGame(saveData);
+                if (success)
+                {
+                    App.Logger.LogInformation("Initial setup saved successfully");
+                }
+                else
+                {
+                    App.Logger.LogWarning("Failed to save initial setup");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger.LogError(ex, "Error saving initial setup");
             }
         }
 
@@ -2639,6 +2779,11 @@ namespace AMICUS
                 _isRoomLocked = saveData.UserSettings.HouseLocked;
                 _isFoodBowlFull = saveData.RoomState.FoodBowlFull;
 
+                // Restore user settings
+                _petName = string.IsNullOrEmpty(saveData.UserSettings.PetName) ? "Kitty" : saveData.UserSettings.PetName;
+                _hasCompletedSetup = saveData.UserSettings.HasCompletedSetup;
+                _decorationColors = saveData.UserSettings.DecorationColors ?? new Dictionary<string, int>();
+
                 // Save poop data for restoration after images load
                 bool hadPoopsOnExit = saveData.RoomState.PoopPositions != null && saveData.RoomState.PoopPositions.Count > 0;
 
@@ -2651,17 +2796,28 @@ namespace AMICUS
                 // Check if game was off long enough to spawn time-away poop
                 TimeSpan timeAway = DateTime.UtcNow - saveData.Session.LastExitTime;
 
+                // Sanity check: if LastExitTime is older than 30 days or negative, treat as invalid/first-time save
+                const double MAX_REASONABLE_DAYS_AWAY = 30.0;
+                if (timeAway.TotalDays > MAX_REASONABLE_DAYS_AWAY || timeAway.TotalSeconds < 0)
+                {
+                    App.Logger.LogWarning("LastExitTime appears invalid (time away: {Days:F1} days). Treating as first launch - skipping time-away poop.",
+                        timeAway.TotalDays);
+                    // Don't spawn time-away poop for invalid data
+                }
+                else
+                {
 #if DEBUG
-                double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
+                    double timeAwayThresholdSeconds = 180.0; // 3 minutes in debug mode
 #else
-                double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
+                    double timeAwayThresholdSeconds = 10800.0; // 3 hours in production mode
 #endif
 
-                if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
-                {
-                    App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
-                        timeAway.TotalSeconds, timeAwayThresholdSeconds);
-                    _shouldSpawnTimeAwayPoop = true;
+                    if (timeAway.TotalSeconds >= timeAwayThresholdSeconds)
+                    {
+                        App.Logger.LogInformation("Game was off for {Seconds:F0} seconds (threshold: {Threshold}). Will spawn time-away poop after images load.",
+                            timeAway.TotalSeconds, timeAwayThresholdSeconds);
+                        _shouldSpawnTimeAwayPoop = true;
+                    }
                 }
 
                 // Set cleanliness to 0 if poops existed on exit

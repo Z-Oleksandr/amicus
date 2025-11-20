@@ -167,11 +167,114 @@
 -   Game loop integration: Spawn timer, proximity detection, animation updates
 -   Persistence uses deferred loading: save data → load images → restore poops
 
-## Next Steps / TODO
+**Work Session (2025-11-19 Part 2) - Release Preparation & Critical Bug Fixes:**
 
-**Future Enhancements**
+✅ **Phase 6: Release Preparation - Installer Setup - COMPLETE**
 
-**Phase 6: Additional Features**
+**Installer System (Inno Setup):**
+
+-   Installer tool: Inno Setup (free, script-based)
+-   Deployment type: Self-contained (bundles .NET 9.0 runtime)
+-   Installer script: `installer.iss` in project root
+-   Publish command: `dotnet publish -c Release -r win-x64 --self-contained true`
+-   Output: `installer_output\Setup_AMICUS_v{version}.exe`
+-   Documentation: `BUILD_INSTALLER.md` (complete build guide)
+
+**Installer Features:**
+
+-   Lets user choose installation location (default: Program Files\AMICUS)
+-   Creates desktop shortcut (optional, user selectable)
+-   Registers for Windows startup (optional, user selectable)
+-   Creates Start Menu shortcut (always)
+-   Uses app icon from `Resources\Icon\Icon1.ico`
+-   Includes proper uninstaller
+-   ~80-100MB installer size (includes .NET 9.0 runtime)
+-   64-bit Windows 10+ only (x64compatible architecture)
+
+**Files Created:**
+
+-   `installer.iss` - Inno Setup configuration script
+-   `BUILD_INSTALLER.md` - Documentation for rebuilding installer after code changes
+-   Published output in `bin\Release\net9.0-windows\win-x64\publish\`
+
+✅ **Critical Bug Fixes - COMPLETE**
+
+**Bug Fix 1: Poop Spawn on First Launch**
+
+-   **Problem:** Time-away poop spawned on first launch when LastExitTime had invalid/default value
+-   **Root Cause:** DateTime.MinValue or unreasonably old dates caused time calculation to trigger spawn
+-   **Solution:** Added validation in LoadGameState() to check if time difference is reasonable
+-   **Implementation:** `MainWindow.xaml.cs:2651-2673`
+-   **Logic:** Skip time-away poop if timeAway > 30 days or < 0 (invalid data)
+-   **Result:** First launch now shows NO poop, time-away feature still works correctly
+
+**Bug Fix 2: Shutdown/Restart Save Persistence**
+
+-   **Problem:** Game state NOT saved when computer shuts down/restarts or app crashes
+-   **Root Cause:** Only saved on manual exit, no handlers for Windows session ending or window closing
+-   **Solution:** Added multiple save handlers for all termination scenarios
+-   **Implementation:**
+    -   `App.xaml.cs:66-80` - SessionEnding event handler (Windows shutdown/restart/logoff)
+    -   `MainWindow.xaml.cs:226` - Window.Closing event registration
+    -   `MainWindow.xaml.cs:2610-2626` - SaveGameStateOnShutdown() and Window_Closing() methods
+-   **Result:** Game state now persists in ALL scenarios (manual exit, shutdown, restart, logoff, window close)
+
+**Persistence Coverage:**
+
+-   ✅ User exits via system tray
+-   ✅ User exits via left window in house
+-   ✅ Windows shutdown
+-   ✅ Windows restart
+-   ✅ User logoff
+-   ✅ Window closed (backup handler)
+
+**Work Session (2025-11-20) - First Startup Setup Experience:**
+
+✅ **First Startup Setup Experience - COMPLETE**
+
+**Setup Dialog Window:**
+
+-   Cozy design with warm colors (#FFF8F0 background)
+-   Centered on screen, 500x620px, no taskbar entry
+-   Window draggable by clicking anywhere (except text input)
+
+**Pet Naming:**
+
+-   Text input for cat name (required, max 20 characters)
+-   Save button disabled until name entered
+-   Default fallback: "Kitty" if cancelled
+
+**Decoration Customization:**
+
+-   Room preview at actual size (232x232)
+-   5 clickable decorations to cycle color variants:
+    -   Bed (6 variants)
+    -   Table (5 variants)
+    -   Plant small (6 variants)
+    -   Window left (3 variants)
+    -   Window right (4 variants)
+-   Visual feedback: scale animation on click
+
+**Persistence:**
+
+-   New fields in SaveData: `HasCompletedSetup`, `PetName`, `DecorationColors`
+-   First startup detection via `SaveManager.LoadGame() == null`
+-   Decoration colors applied in `LoadRoom()` via variant indices
+-   Custom system tray icon loaded from `Resources/Icon/Icon1.ico`
+
+**Files Created:**
+
+-   `SetupWindow.xaml` - Setup dialog UI
+-   `SetupWindow.xaml.cs` - Setup dialog logic
+
+**Files Modified:**
+
+-   `Data/SaveData.cs` - Added user settings fields
+-   `MainWindow.xaml.cs` - Startup flow, LoadRoom colors, save/load methods
+
+---
+
+## Future Enhancements
 
 ⏳ **Reminder System:**
 
@@ -182,17 +285,15 @@
 
 ⏳ **Settings Menu:**
 
--   Pet customization on first startup
 -   Settings button in room
 -   Sound toggle, reminder management
+-   Edit pet name and decoration colors
 
 ⏳ **Polish:**
 
 -   Sound effects and purring
 -   Additional room types
 -   More interactive items
--   Scoop litter box cleaning mechanic
--   Garbage special interaction
 
 ## Project Structure
 
