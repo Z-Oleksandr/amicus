@@ -28,6 +28,10 @@ namespace AMICUS
         {
             base.OnStartup(e);
 
+            // Fix auto-start resource loading: Set working directory to application directory
+            // Windows auto-start sets working directory to System32, causing relative URI resolution to fail
+            System.IO.Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
+
             // Attach to parent console if launched from terminal (PowerShell/CMD)
             // If no parent console, allocate a new one
             if (!AttachConsole(ATTACH_PARENT_PROCESS))
