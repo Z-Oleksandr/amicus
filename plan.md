@@ -228,22 +228,53 @@
 -   ✅ User logoff
 -   ✅ Window closed (backup handler)
 
-## Next Steps / TODO
+**Work Session (2025-11-20) - First Startup Setup Experience:**
 
-**Immediate Priority - Release Preparation (Section 2 from release.md):**
+✅ **First Startup Setup Experience - COMPLETE**
 
-⏳ **First Startup Setup Experience:**
+**Setup Dialog Window:**
 
--   Dialog window for initial setup (middle of screen, cozy/soft colors)
--   User names their cat (save to persistence)
--   User picks colors for house decorations (save to persistence)
--   Interactive demo of house where each element can be clicked to cycle through colors
--   Save button to complete setup
--   Subsequent startups use saved preferences
+-   Cozy design with warm colors (#FFF8F0 background)
+-   Centered on screen, 500x620px, no taskbar entry
+-   Window draggable by clicking anywhere (except text input)
 
-**Future Enhancements**
+**Pet Naming:**
 
-**Phase 6: Additional Features**
+-   Text input for cat name (required, max 20 characters)
+-   Save button disabled until name entered
+-   Default fallback: "Kitty" if cancelled
+
+**Decoration Customization:**
+
+-   Room preview at actual size (232x232)
+-   5 clickable decorations to cycle color variants:
+    -   Bed (6 variants)
+    -   Table (5 variants)
+    -   Plant small (6 variants)
+    -   Window left (3 variants)
+    -   Window right (4 variants)
+-   Visual feedback: scale animation on click
+
+**Persistence:**
+
+-   New fields in SaveData: `HasCompletedSetup`, `PetName`, `DecorationColors`
+-   First startup detection via `SaveManager.LoadGame() == null`
+-   Decoration colors applied in `LoadRoom()` via variant indices
+-   Custom system tray icon loaded from `Resources/Icon/Icon1.ico`
+
+**Files Created:**
+
+-   `SetupWindow.xaml` - Setup dialog UI
+-   `SetupWindow.xaml.cs` - Setup dialog logic
+
+**Files Modified:**
+
+-   `Data/SaveData.cs` - Added user settings fields
+-   `MainWindow.xaml.cs` - Startup flow, LoadRoom colors, save/load methods
+
+---
+
+## Future Enhancements
 
 ⏳ **Reminder System:**
 
@@ -263,7 +294,6 @@
 -   Sound effects and purring
 -   Additional room types
 -   More interactive items
--   Additional decoration color variants
 
 ## Project Structure
 
