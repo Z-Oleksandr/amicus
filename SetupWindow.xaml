@@ -11,7 +11,8 @@
         ResizeMode="NoResize"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="Transparent">
+        Background="Transparent"
+        ShowInTaskbar="False">
 
     <Window.Resources>
         <!-- Cozy Button Style -->

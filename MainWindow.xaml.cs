@@ -251,7 +251,25 @@ namespace AMICUS
         private void SetupSystemTray()
         {
             _notifyIcon = new WinForms.NotifyIcon();
-            _notifyIcon.Icon = SystemIcons.Application; // Default icon for now
+
+            // Load custom icon from resources
+            try
+            {
+                var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Icon", "Icon1.ico");
+                if (System.IO.File.Exists(iconPath))
+                {
+                    _notifyIcon.Icon = new System.Drawing.Icon(iconPath);
+                }
+                else
+                {
+                    _notifyIcon.Icon = SystemIcons.Application;
+                }
+            }
+            catch
+            {
+                _notifyIcon.Icon = SystemIcons.Application;
+            }
+
             _notifyIcon.Text = "Amicus - Desktop Pet";
             _notifyIcon.Visible = true;
 
