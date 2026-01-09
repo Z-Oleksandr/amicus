@@ -49,11 +49,11 @@ A cozy desktop companion that lives on your screen. Amicus is a retro-style pixe
 -   Windows 10/11 (64-bit)
 -   .NET 9.0 Runtime (included in installer)
 
-## Installation
+# Installation
 
-### Using Installer
+## Using Installer
 
-1. Download the latest `Setup_AMICUS_vX.X.X.exe` from releases
+1. Download the latest `Setup_AMICUS_vX.X.X.exe` from releases (or installer__output folder)
 2. Run the installer
 3. Choose installation options (desktop shortcut, startup)
 4. Launch Amicus
