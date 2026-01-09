@@ -2076,6 +2076,16 @@ namespace AMICUS
                 double deltaTime = (currentTime - _lastUpdateTime).TotalSeconds;
                 _lastUpdateTime = currentTime;
 
+                // Clamp delta time to prevent animation speed-up after computer sleep/wake
+                // Maximum delta time prevents large time gaps from causing rapid state changes
+                const double MAX_DELTA_TIME = 0.1; // 100ms - prevents sleep/wake issues
+                if (deltaTime > MAX_DELTA_TIME)
+                {
+                    App.Logger.LogWarning("Large delta time detected ({Original:F3}s), clamped to {Max:F3}s (likely sleep/wake)",
+                        deltaTime, MAX_DELTA_TIME);
+                    deltaTime = MAX_DELTA_TIME;
+                }
+
             // Update mouse position every frame
             UpdateMousePosition();
 
