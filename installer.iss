@@ -2,7 +2,7 @@
 ; This script creates a Windows installer for the AMICUS desktop pet application
 
 #define MyAppName "AMICUS"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "SB Apps"
 #define MyAppURL "https://github.com/Z-Oleksandr/amicus"
 #define MyAppExeName "AMICUS.exe"
