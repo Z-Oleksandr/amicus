@@ -73,10 +73,10 @@ namespace AMICUS
         private double _wanderTimer = 0;
         private double _wanderInterval = 3.0; // Change direction every 3 seconds
         private double _idleTimer = 0;
-        private double _idleInterval = 5.0; // Go idle every 5 seconds
+        private double _idleInterval = 7.0; // Go idle every 7 seconds (increased for more idle time)
 
         // Needs degradation rates (per hour)
-        private const double HUNGER_DECAY_PER_HOUR = 66.67; // 100→0 in 1.5 hours
+        private const double HUNGER_DECAY_PER_HOUR = 44.44; // 100→0 in 2.25 hours (50% slower)
         private const double CLEANLINESS_DECAY_OUTSIDE_PER_HOUR = 50.0; // 100→0 in 2 hours when outside
         private const double CLEANLINESS_DECAY_INSIDE_PER_HOUR = 0.0; // No decay when inside
         private const double HAPPINESS_DECAY_INSIDE_PER_HOUR = 10.0; // -10 per hour when inside
@@ -132,7 +132,7 @@ namespace AMICUS
         private bool _isDraggingPetFromRoom = false;
         private System.Windows.Point _petInRoomDragOffset;
         private double _exitRoomTimer = 0;
-        private double _exitRoomInterval = 50.0; // Initial interval value = 50 seconds
+        private double _exitRoomInterval = 75.0; // Initial interval value = 75 seconds (increased 50%)
 
         // Food bowl state
         private bool _isFoodBowlFull = false;
@@ -1155,7 +1155,7 @@ namespace AMICUS
                 // Pet was dragged to the house!
                 App.Logger.LogInformation("Pet dragged to house area!");
 
-                // Show the house panel if not already visible
+                // Show the house panel if not already visible (user dragging is intentional action)
                 if (HousePanel.Visibility == Visibility.Collapsed)
                 {
                     ShowHousePanel();
@@ -1165,12 +1165,6 @@ namespace AMICUS
                 if (HousePanel.Visibility == Visibility.Visible)
                 {
                     TransitionPetIntoRoom();
-                }
-                else
-                {
-                    // Increase happiness for bringing pet home
-                    _happiness = Math.Min(100, _happiness + 5);
-                    UpdateNeedsDisplay();
                 }
             }
         }
@@ -1206,7 +1200,7 @@ namespace AMICUS
 
             // Reset exit timer
             _exitRoomTimer = 0;
-            _exitRoomInterval = _random.Next(30, 60); // Random 30-60 seconds
+            _exitRoomInterval = _random.Next(45, 90); // Random 45-90 seconds (increased 50%)
 
             // Increase happiness for being in room
             _happiness = Math.Min(100, _happiness + 5);
@@ -2055,7 +2049,7 @@ namespace AMICUS
         private void UpdateNeedsDisplay()
         {
             // Update needs indicators above the room
-            HungerBar.Value = _hunger;
+            HungerBar.Value = 100 - _hunger;  // Inverted: 100 = hungry, 0 = full
             CleanlinessBar.Value = _cleanliness;
             HappinessBar.Value = _happiness;
         }
@@ -2151,7 +2145,7 @@ namespace AMICUS
                         {
                             // Reset timer for next check
                             _exitRoomTimer = 0;
-                            _exitRoomInterval = _random.Next(30, 60);
+                            _exitRoomInterval = _random.Next(45, 90); // Random 45-90 seconds (increased 50%)
                         }
                     }
                 }
@@ -2419,15 +2413,9 @@ namespace AMICUS
                         _petVelocityX = 0;
                         _petVelocityY = 0;
 
-                        App.Logger.LogInformation("Reached house area! Opening house panel and entering room.");
+                        App.Logger.LogInformation("Reached house area! Entering room without changing panel visibility.");
 
-                        // Show house panel if not already visible
-                        if (HousePanel.Visibility == Visibility.Collapsed)
-                        {
-                            ShowHousePanel();
-                        }
-
-                        // Transition pet into room
+                        // Transition pet into room without forcing panel visibility
                         TransitionPetIntoRoom();
                     }
                     else
@@ -2497,7 +2485,7 @@ namespace AMICUS
 
                         // Reset idle timer and set new interval when transitioning to idle
                         _idleTimer = 0;
-                        _idleInterval = _random.Next(3, 8);
+                        _idleInterval = _random.Next(4, 10); // Range: 4-10 seconds (was 3-8, increased 50%)
 
                         // App.Logger.LogDebug("Wandering: Walking → Idle (velocity cleared)");
                     }
@@ -2521,10 +2509,10 @@ namespace AMICUS
                 if (_animationController.CurrentState == PetState.Idle && _idleTimer >= _idleInterval)
                 {
                     _idleTimer = 0;
-                    _idleInterval = _random.Next(3, 8); // Random interval 3-8 seconds
+                    _idleInterval = _random.Next(4, 10); // Random interval 4-10 seconds (increased 50%)
 
-                    // Random chance to start walking (50% chance)
-                    if (_random.NextDouble() < 0.5)
+                    // Random chance to start walking (40% chance, reduced for more idle time)
+                    if (_random.NextDouble() < 0.4)
                     {
                         _animationController.ChangeState(PetState.Walking);
 
@@ -3154,7 +3142,7 @@ namespace AMICUS
                 }
 
                 // Degradation rates per hour (time-away)
-                const double HUNGER_DECAY_AWAY_PER_HOUR = 66.67; // Same as active gameplay
+                const double HUNGER_DECAY_AWAY_PER_HOUR = 44.44; // Same as active gameplay (50% slower)
                 const double CLEANLINESS_DECAY_IN_HOUSE_PER_HOUR = 0.333; // 1 point per 3 hours
                 const double CLEANLINESS_DECAY_OUTSIDE_HOUSE_PER_HOUR = 50.0; // Same as active
                 const double HAPPINESS_DECAY_AWAY_PER_HOUR = 5.0; // Fixed rate when away
